@@ -1,8 +1,18 @@
 import { useState } from 'react'
-import { ArrowLeft, CalendarDays, CheckCircle2, MapPin, ShieldCheck, Star } from 'lucide-react'
+import {
+  ArrowLeft,
+  CalendarDays,
+  CheckCircle2,
+  MapPin,
+  ShieldCheck,
+  Star,
+  XCircle,
+} from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Badge, money, PageTitle } from '../components/Layout'
 import { ResourceImage } from '../components/ResourceImage'
+import { OwnerVerificationBadge, VerificationBadge } from '../components/VerificationBadge'
+import { isPubliclyListed, ownerVerificationLevel } from '../lib/verification'
 import { formatDate } from '../lib/clock'
 import { calculatePricing } from '../lib/pricing'
 import { useApp } from '../store/AppStore'
@@ -15,6 +25,17 @@ export const Item = () => {
   const [units, setUnits] = useState(1)
   const pricing = calculatePricing({ resource, mode, units, platform: state.config })
   const navigate = useNavigate()
+  const verification = resource.verification
+  const verifier = state.users.find((user) => user.id === verification.verifierId)
+  const listed = isPubliclyListed(resource)
+  const blockedReason =
+    verification.status === 'Rejected'
+      ? 'Verification rejected'
+      : verification.status === 'Under Inspection'
+        ? 'Equipment verification in progress'
+        : verification.status === 'Verified'
+          ? 'Awaiting campus approval'
+          : 'Awaiting campus equipment verification'
   return (
     <>
       <Link
@@ -23,6 +44,38 @@ export const Item = () => {
       >
         <ArrowLeft className="h-4 w-4" /> Back to discover
       </Link>
+      {!listed && (
+        <section
+          className={`mb-6 rounded-2xl border p-5 ${verification.status === 'Rejected' ? 'border-rose-200 bg-rose-50' : 'border-amber-200 bg-amber-50'}`}
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <VerificationBadge resource={resource} verifierName={verifier?.name} />
+            <p className="text-xs font-extrabold text-slate-900">{blockedReason}</p>
+          </div>
+          <p className="mt-2 text-xs leading-5 text-slate-600">
+            A campus verifier checks the full equipment — accessories, condition, working order and
+            ownership proof — before an item can be borrowed.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {verification.checks.map((check) => (
+              <li key={check.label} className="flex items-start gap-2 text-xs text-slate-600">
+                {check.passed ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                ) : (
+                  <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-slate-400" />
+                )}
+                <span>
+                  {check.label}
+                  {check.note && <span className="block text-[11px] text-rose-600">{check.note}</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {verification.note && (
+            <p className="mt-3 text-xs font-bold text-slate-700">{verification.note}</p>
+          )}
+        </section>
+      )}
       <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr_320px]">
         <div>
           <ResourceImage resource={resource} />
@@ -38,7 +91,8 @@ export const Item = () => {
         <section>
           <Badge tone="green">{resource.category}</Badge>
           <h1 className="mt-4 text-3xl font-black tracking-tight">{resource.title}</h1>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <VerificationBadge resource={resource} verifierName={verifier?.name} />
             <Badge>{resource.condition}</Badge>
             <Badge>
               <MapPin className="mr-1 inline h-3 w-3" />
@@ -69,6 +123,13 @@ export const Item = () => {
                 View profile →
               </Link>
             </div>
+            <p className="mt-3 text-xs text-slate-500">
+              {ownerVerificationLevel(owner.verification) === 'Fully Verified'
+                ? listed
+                  ? 'Owner and equipment are both fully verified by the campus desk.'
+                  : 'Owner is fully verified — the equipment still needs its campus check.'
+                : 'Owner verification is still incomplete.'}
+            </p>
             <div className="mt-4 flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 font-bold text-emerald-800">
                 {owner.avatarInitials}
@@ -83,6 +144,9 @@ export const Item = () => {
                 <p className="text-xs text-slate-500">
                   {owner.department} · {owner.year} · Trust {owner.trustScore}
                 </p>
+                <div className="mt-2">
+                  <OwnerVerificationBadge user={owner} />
+                </div>
               </div>
             </div>
           </div>
@@ -152,16 +216,52 @@ export const Item = () => {
             </div>
           </div>
           <button
+            disabled={!listed}
             onClick={() => navigate(`/agreement/${resource.id}`)}
-            className="mt-5 w-full rounded-xl bg-emerald-600 py-3.5 text-xs font-bold text-white hover:bg-emerald-700"
+            className="mt-5 w-full rounded-xl bg-emerald-600 py-3.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
           >
             Request to borrow
           </button>
           <p className="mt-3 text-center text-[10px] text-slate-400">
-            Deposit is refundable after a clean return.
+            {listed ? 'Deposit is refundable after a clean return.' : blockedReason}
           </p>
         </aside>
       </div>
+      {verification.status === 'Verified' && (
+        <div className="mt-10 rounded-2xl border border-emerald-200 bg-white p-6">
+          <PageTitle eyebrow="Trust evidence" title="Campus inspection record" />
+          <div className="flex flex-wrap gap-3 text-xs text-slate-600">
+            <span className="rounded-lg bg-emerald-50 px-3 py-2 font-bold text-emerald-700">
+              <ShieldCheck className="mr-1 inline h-3.5 w-3.5" />
+              Verified condition: {verification.verifiedCondition ?? resource.condition}
+            </span>
+            <span className="rounded-lg bg-slate-50 px-3 py-2 font-semibold">
+              Verifier: {verifier?.name ?? 'Campus verification desk'}
+            </span>
+            <span className="rounded-lg bg-slate-50 px-3 py-2 font-semibold">
+              Inspected {verification.inspectedAt ? formatDate(verification.inspectedAt) : '—'}
+            </span>
+            <span className="rounded-lg bg-slate-50 px-3 py-2 font-semibold">
+              Submitted {formatDate(verification.submittedAt)}
+            </span>
+          </div>
+          <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+            {verification.checks.map((check) => (
+              <li key={check.label} className="flex items-start gap-2 text-xs text-slate-600">
+                {check.passed ? (
+                  <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                ) : (
+                  <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-rose-500" />
+                )}
+                <span>{check.label}</span>
+              </li>
+            ))}
+          </ul>
+          {verification.note && (
+            <p className="mt-3 text-xs text-slate-500">{verification.note}</p>
+          )}
+        </div>
+      )}
       <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-6">
         <PageTitle eyebrow="Availability" title="Plan around campus schedules" />
         <div className="grid grid-cols-7 gap-2 md:grid-cols-14">

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Check, Flag, ShieldAlert, Trash2, UserCheck, X } from 'lucide-react'
+import { BadgeCheck, Flag, ScanSearch, ShieldAlert, Trash2, UserCheck, X } from 'lucide-react'
 import {
   CartesianGrid,
   Line,
@@ -9,12 +9,23 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import type { Condition, EquipmentCheck, Resource } from '../data/types'
 import { aggregateImpact } from '../lib/impact'
+import { pendingVerificationCount, STANDARD_CHECKS } from '../lib/verification'
 import { formatDate } from '../lib/clock'
 import { Badge, money } from './Layout'
 import { useApp } from '../store/AppStore'
+import { VerificationBadge } from './VerificationBadge'
 
-type Tab = 'Overview' | 'Users' | 'Resources' | 'Exchanges' | 'Disputes' | 'Settings'
+type Tab =
+  | 'Overview'
+  | 'Verification'
+  | 'Users'
+  | 'Resources'
+  | 'Exchanges'
+  | 'Disputes'
+  | 'Settings'
+const conditions: Condition[] = ['Like New', 'Good', 'Fair', 'Worn']
 
 export const AdminTabs = () => {
   const [tab, setTab] = useState<Tab>('Overview')
@@ -33,6 +44,7 @@ export const AdminTabs = () => {
     (exchange) => exchange.payment.status === 'Pending',
   ).length
   const impact = aggregateImpact(state)
+  const awaitingInspection = pendingVerificationCount(state.resources)
   const filteredExchanges = useMemo(
     () =>
       state.exchanges.filter(
@@ -43,17 +55,30 @@ export const AdminTabs = () => {
   return (
     <div>
       <div className="mb-7 flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-sm">
-        {(['Overview', 'Users', 'Resources', 'Exchanges', 'Disputes', 'Settings'] as Tab[]).map(
-          (item) => (
+        {(
+          [
+            'Overview',
+            'Verification',
+            'Users',
+            'Resources',
+            'Exchanges',
+            'Disputes',
+            'Settings',
+          ] as Tab[]
+        ).map((item) => (
             <button
               key={item}
               onClick={() => setTab(item)}
               className={`whitespace-nowrap rounded-xl px-4 py-3 text-xs font-bold ${tab === item ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-50'}`}
-            >
-              {item}
-            </button>
-          ),
-        )}
+          >
+            {item}
+            {item === 'Verification' && awaitingInspection > 0 && (
+              <span className="ml-2 rounded-md bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-800">
+                {awaitingInspection}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
       {tab === 'Overview' && (
         <Overview
@@ -63,6 +88,7 @@ export const AdminTabs = () => {
           revenueOverTime={impact.feeRevenueOverTime}
         />
       )}
+      {tab === 'Verification' && <VerificationPanel />}
       {tab === 'Users' && <UsersPanel />}
       {tab === 'Resources' && <ResourcesPanel />}
       {tab === 'Exchanges' && (
@@ -245,37 +271,21 @@ export const AdminTabs = () => {
               <div className="flex-1">
                 <p className="text-sm font-black">{resource.title}</p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {resource.category} · {resource.approvalStatus}
+                  {resource.category} · {resource.approvalStatus} ·{' '}
+                  {resource.verification.status}
                 </p>
+                <div className="mt-2">
+                  <VerificationBadge resource={resource} />
+                </div>
               </div>
               <div className="flex gap-2">
-                {resource.approvalStatus === 'Pending' && (
-                  <>
-                    <button
-                      onClick={() =>
-                        dispatch({
-                          type: 'adminResource',
-                          resourceId: resource.id,
-                          action: 'approve',
-                        })
-                      }
-                      className="rounded-lg bg-emerald-600 p-2 text-white"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() =>
-                        dispatch({
-                          type: 'adminResource',
-                          resourceId: resource.id,
-                          action: 'reject',
-                        })
-                      }
-                      className="rounded-lg bg-slate-900 p-2 text-white"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </>
+                {resource.verification.status !== 'Verified' && (
+                  <button
+                    onClick={() => setTab('Verification')}
+                    className="rounded-lg bg-slate-900 px-3 py-2 text-[11px] font-bold text-white"
+                  >
+                    Inspect in Verification
+                  </button>
                 )}
                 <button
                   onClick={() =>
@@ -296,6 +306,167 @@ export const AdminTabs = () => {
               </div>
             </div>
           ))}
+      </div>
+    )
+  }
+
+  function VerificationPanel() {
+    const queue = state.resources.filter(
+      (resource) => resource.verification.status !== 'Verified' && !resource.removed,
+    )
+    const verified = state.resources.filter(
+      (resource) => resource.verification.status === 'Verified',
+    ).length
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {[
+            ['Awaiting inspection', awaitingInspection],
+            ['Verified equipment', verified],
+            [
+              'Rejected',
+              state.resources.filter((resource) => resource.verification.status === 'Rejected')
+                .length,
+            ],
+          ].map(([label, value]) => (
+            <div
+              className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+              key={label as string}
+            >
+              <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                {label as string}
+              </p>
+              <p className="mt-3 text-3xl font-black">{value as number}</p>
+            </div>
+          ))}
+        </div>
+        {queue.length === 0 ? (
+          <p className="rounded-2xl border border-slate-200 bg-white p-5 text-xs text-slate-500 shadow-sm">
+            Every listed resource has passed its campus equipment check.
+          </p>
+        ) : (
+          queue.map((resource) => <VerificationRow resource={resource} key={resource.id} />)
+        )}
+      </div>
+    )
+  }
+
+  function VerificationRow({ resource }: { resource: Resource }) {
+    const [checks, setChecks] = useState<EquipmentCheck[]>(
+      resource.verification.checks.length
+        ? resource.verification.checks
+        : STANDARD_CHECKS.map((label) => ({ label, passed: false })),
+    )
+    const [condition, setCondition] = useState<Condition>(
+      resource.verification.verifiedCondition ?? resource.condition,
+    )
+    const [note, setNote] = useState(resource.verification.note ?? '')
+    const owner = state.users.find((user) => user.id === resource.ownerId)
+    const allPassed = checks.every((check) => check.passed)
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-black">{resource.title}</p>
+            <p className="mt-1 text-xs text-slate-500">
+              {resource.category} · Listed by {owner?.name ?? resource.ownerId} · Submitted{' '}
+              {formatDate(resource.verification.submittedAt)}
+            </p>
+          </div>
+          <Badge
+            tone={
+              resource.verification.status === 'Rejected'
+                ? 'rose'
+                : resource.verification.status === 'Under Inspection'
+                  ? 'amber'
+                  : 'slate'
+            }
+          >
+            {resource.verification.status}
+          </Badge>
+        </div>
+        {resource.verification.status === 'Submitted' && (
+          <button
+            onClick={() => dispatch({ type: 'startInspection', resourceId: resource.id })}
+            className="mt-4 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"
+          >
+            <ScanSearch className="mr-1 inline h-3.5 w-3.5" /> Start inspection
+          </button>
+        )}
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          {checks.map((check, index) => (
+            <label
+              className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600"
+              key={check.label}
+            >
+              <input
+                type="checkbox"
+                checked={check.passed}
+                onChange={(event) =>
+                  setChecks(
+                    checks.map((item, position) =>
+                      position === index ? { ...item, passed: event.target.checked } : item,
+                    ),
+                  )
+                }
+                className="accent-emerald-600"
+              />
+              {check.label}
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-[160px_1fr]">
+          <select
+            value={condition}
+            onChange={(event) => setCondition(event.target.value as Condition)}
+            className="field"
+          >
+            {conditions.map((item) => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+          <input
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            className="field"
+            placeholder="Inspection note"
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            disabled={!allPassed}
+            onClick={() =>
+              dispatch({
+                type: 'verifyResource',
+                resourceId: resource.id,
+                checks,
+                verifiedCondition: condition,
+                note: note || undefined,
+              })
+            }
+            className="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:bg-emerald-300"
+          >
+            <BadgeCheck className="mr-1 inline h-3.5 w-3.5" /> Verify and publish
+          </button>
+          <button
+            onClick={() =>
+              dispatch({
+                type: 'rejectResource',
+                resourceId: resource.id,
+                note: note || 'Equipment did not pass the campus check.',
+                checks,
+              })
+            }
+            className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600"
+          >
+            <X className="mr-1 inline h-3.5 w-3.5" /> Reject
+          </button>
+          {!allPassed && (
+            <span className="text-[11px] text-slate-500">
+              Every check must pass before an item can be published.
+            </span>
+          )}
+        </div>
       </div>
     )
   }

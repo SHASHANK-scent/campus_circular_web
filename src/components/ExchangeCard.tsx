@@ -4,6 +4,7 @@ import type { Exchange, Resource, User } from '../data/types'
 import { formatDate, formatRelative } from '../lib/clock'
 import { Badge, money } from './Layout'
 import { ResourceImage } from './ResourceImage'
+import { VerificationBadge } from './VerificationBadge'
 
 export const ExchangeCard = ({
   exchange,
@@ -32,6 +33,9 @@ export const ExchangeCard = ({
             <h3 className="truncate text-sm font-extrabold group-hover:text-emerald-700">
               {resource.title}
             </h3>
+            <div className="mt-1">
+              <VerificationBadge resource={resource} />
+            </div>
             <p className="mt-1 text-xs text-slate-500">
               {exchange.plan.mode} · {exchange.plan.units} unit
               {exchange.plan.units > 1 ? 's' : ''} · {formatDate(exchange.plan.startAt)}

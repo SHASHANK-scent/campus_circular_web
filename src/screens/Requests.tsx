@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import type { Category, CommunityRequest } from '../data/types'
 import { Badge, PageTitle } from '../components/Layout'
 import { useApp } from '../store/AppStore'
+import { isPubliclyListed } from '../lib/verification'
 
 const categories: Category[] = [
   'Camera & Video',
@@ -31,7 +32,9 @@ export const Requests = () => {
   const [note, setNote] = useState('I can lend this from the listed location.')
   const ownResources = useMemo(
     () =>
-      state.resources.filter((resource) => resource.ownerId === current.id && !resource.removed),
+      state.resources.filter(
+        (resource) => resource.ownerId === current.id && isPubliclyListed(resource),
+      ),
     [current.id, state.resources],
   )
   const postRequest = () => {

@@ -3,6 +3,7 @@ import type { Exchange, PlatformConfig, Resource } from '../data/types'
 import { canTransition, roleFor, settlementForExchange } from '../lib/lifecycle'
 import type { Action } from '../store/AppStore'
 import { money } from './Layout'
+import { VerificationBadge } from './VerificationBadge'
 
 export const ExchangeSidebar = ({
   exchange,
@@ -151,6 +152,14 @@ export const ExchangeSidebar = ({
         ) : (
           <p className="mt-3 text-xs text-slate-500">No action required from you right now.</p>
         )}
+      </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+          Equipment verification
+        </p>
+        <div className="mt-3">
+          <VerificationBadge resource={resource} subline />
+        </div>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <p className="text-xs font-bold uppercase tracking-widest text-slate-400">

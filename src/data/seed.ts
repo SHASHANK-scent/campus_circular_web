@@ -2,11 +2,14 @@ import type {
   AppState,
   Category,
   Condition,
+  OwnerVerification,
   Payment,
   Resource,
+  ResourceVerification,
   User,
 } from './types'
 import { settleCharges } from '../lib/pricing'
+import { ownerVerificationLevel, STANDARD_CHECKS } from '../lib/verification'
 
 const now = new Date('2025-03-15T10:00:00+05:30')
 const iso = (days: number, hours = 0) =>
@@ -17,6 +20,21 @@ const evidencePhoto =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23ffe4e6'/%3E%3Ccircle cx='80' cy='60' r='32' fill='%23fb7185'/%3E%3Cpath d='M57 80l46-40M65 88l42-34' stroke='%239f1239' stroke-width='6'/%3E%3C/svg%3E"
 const afterEvidencePhoto =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23fee2e2'/%3E%3Crect x='42' y='30' width='76' height='60' rx='12' fill='%23fb7185'/%3E%3Cpath d='M58 72l44-30' stroke='%239f1239' stroke-width='7'/%3E%3C/svg%3E"
+const ownerVerification = (
+  identityVerified: boolean,
+  campusVerified: boolean,
+  contactVerified: boolean,
+  verifiedAt?: string,
+): OwnerVerification => {
+  const flags = { identityVerified, campusVerified, contactVerified }
+  const level = ownerVerificationLevel({ ...flags, level: 'Unverified' })
+  return {
+    ...flags,
+    level,
+    ...(level === 'Unverified' ? {} : { verifiedAt: verifiedAt ?? iso(-70) }),
+  }
+}
+const fullyVerified = () => ownerVerification(true, true, true)
 export const seedUsers: User[] = [
   {
     id: 'u1',
@@ -35,6 +53,7 @@ export const seedUsers: User[] = [
     hostel: 'Azad Hall',
     distanceMeters: 0,
     badges: ['Early adopter', 'Reliable lender', 'Community builder'],
+    verification: fullyVerified(),
   },
   {
     id: 'u2',
@@ -52,7 +71,8 @@ export const seedUsers: User[] = [
     joinedOn: '2022-07-10',
     hostel: 'Ganga Hostel',
     distanceMeters: 450,
-    badges: ['Top lender', 'Verified identity'],
+    badges: ['Top lender', 'Verified identity', 'Campus Verifier'],
+    verification: fullyVerified(),
   },
   {
     id: 'u3',
@@ -71,6 +91,7 @@ export const seedUsers: User[] = [
     hostel: 'Tagore House',
     distanceMeters: 800,
     badges: ['Fixer'],
+    verification: fullyVerified(),
   },
   {
     id: 'u4',
@@ -89,6 +110,7 @@ export const seedUsers: User[] = [
     hostel: 'Nalanda Hall',
     distanceMeters: 1200,
     badges: ['Event helper', 'Top lender'],
+    verification: fullyVerified(),
   },
   {
     id: 'u5',
@@ -96,7 +118,7 @@ export const seedUsers: User[] = [
     avatarInitials: 'RD',
     department: 'Physics',
     year: '1st year',
-    verified: true,
+    verified: false,
     trustScore: 41,
     rating: 3.4,
     ratingsCount: 9,
@@ -107,6 +129,7 @@ export const seedUsers: User[] = [
     hostel: 'Azad Hall',
     distanceMeters: 300,
     badges: ['New member'],
+    verification: ownerVerification(true, false, true),
   },
   {
     id: 'u6',
@@ -125,6 +148,7 @@ export const seedUsers: User[] = [
     hostel: 'Ganga Hostel',
     distanceMeters: 1700,
     badges: [],
+    verification: ownerVerification(true, true, false),
   },
   {
     id: 'u7',
@@ -143,6 +167,7 @@ export const seedUsers: User[] = [
     hostel: 'Tagore House',
     distanceMeters: 650,
     badges: ['Lab pro'],
+    verification: fullyVerified(),
   },
   {
     id: 'u8',
@@ -161,6 +186,7 @@ export const seedUsers: User[] = [
     hostel: 'Nalanda Hall',
     distanceMeters: 950,
     badges: ['Bookworm'],
+    verification: fullyVerified(),
   },
   {
     id: 'u9',
@@ -168,7 +194,7 @@ export const seedUsers: User[] = [
     avatarInitials: 'NT',
     department: 'Civil Engineering',
     year: '2nd year',
-    verified: true,
+    verified: false,
     trustScore: 73,
     rating: 4.1,
     ratingsCount: 8,
@@ -179,6 +205,7 @@ export const seedUsers: User[] = [
     hostel: 'Azad Hall',
     distanceMeters: 1400,
     badges: [],
+    verification: ownerVerification(false, false, false),
   },
   {
     id: 'u10',
@@ -196,7 +223,8 @@ export const seedUsers: User[] = [
     joinedOn: '2022-06-03',
     hostel: 'Ganga Hostel',
     distanceMeters: 1100,
-    badges: ['Top lender', 'Perfect record'],
+    badges: ['Top lender', 'Perfect record', 'Campus Verifier'],
+    verification: fullyVerified(),
   },
 ]
 
@@ -243,6 +271,50 @@ const catalog: [Category, string, string, string[]][] = [
   ],
 ]
 const owners = ['u2', 'u4', 'u7', 'u10', 'u1', 'u3']
+const verifiers = ['u2', 'u10']
+const awaitingInspectionIndex = 26
+const underInspectionIndex = 25
+const rejectedIndex = 29
+const resourceVerification = (index: number, condition: Condition): ResourceVerification => {
+  if (index === rejectedIndex) {
+    return {
+      status: 'Rejected',
+      submittedAt: iso(-65),
+      inspectedAt: iso(-60),
+      verifierId: verifiers[1],
+      checks: STANDARD_CHECKS.map((label, position) => ({
+        label,
+        passed: position !== 2,
+        ...(position === 2 ? { note: 'Did not power on during the check.' } : {}),
+      })),
+      note: 'Equipment failed the working-order check. Repair it and submit again.',
+    }
+  }
+  if (index === underInspectionIndex) {
+    return {
+      status: 'Under Inspection',
+      submittedAt: iso(-4),
+      verifierId: verifiers[0],
+      checks: STANDARD_CHECKS.map((label) => ({ label, passed: false })),
+    }
+  }
+  if (index === awaitingInspectionIndex) {
+    return {
+      status: 'Submitted',
+      submittedAt: iso(-1),
+      checks: STANDARD_CHECKS.map((label) => ({ label, passed: false })),
+    }
+  }
+  return {
+    status: 'Verified',
+    submittedAt: iso(-65),
+    inspectedAt: iso(-60),
+    verifierId: verifiers[index % verifiers.length],
+    verifiedCondition: condition,
+    checks: STANDARD_CHECKS.map((label) => ({ label, passed: true })),
+    note: 'Full equipment check completed at the campus verification desk.',
+  }
+}
 const conditions: Condition[] = ['Like New', 'Good', 'Good', 'Fair', 'Like New']
 export const seedResources: Resource[] = catalog.map(([category, title, tag, tags], index) => ({
   id: `r${index + 1}`,
@@ -277,7 +349,13 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
   ],
   rating: 4.1 + (index % 9) / 10,
   timesBorrowed: [1, 3, 6, 17, 25].includes(index) ? 0 : 5 + index * 2,
-  approvalStatus: index >= 27 ? 'Pending' : 'Approved',
+  approvalStatus:
+    index === rejectedIndex
+      ? 'Rejected'
+      : index === underInspectionIndex || index === awaitingInspectionIndex
+        ? 'Pending'
+        : 'Approved',
+  verification: resourceVerification(index, conditions[index % conditions.length]),
   flagged: index === 4,
   history:
     index % 4 === 0
@@ -295,7 +373,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 6,
+  stateVersion: 7,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],

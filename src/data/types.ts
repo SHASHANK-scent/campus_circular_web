@@ -10,6 +10,29 @@ export type Category =
   | 'Event & Decor'
   | 'Lab & Electronics'
 export type Condition = 'Like New' | 'Good' | 'Fair' | 'Worn'
+export type VerificationStatus = 'Submitted' | 'Under Inspection' | 'Verified' | 'Rejected'
+export interface EquipmentCheck {
+  label: string
+  passed: boolean
+  note?: string
+}
+export interface ResourceVerification {
+  status: VerificationStatus
+  submittedAt: string
+  inspectedAt?: string
+  verifierId?: UserId
+  verifiedCondition?: Condition
+  checks: EquipmentCheck[]
+  note?: string
+}
+export type OwnerVerificationLevel = 'Unverified' | 'Basic' | 'Fully Verified'
+export interface OwnerVerification {
+  identityVerified: boolean
+  campusVerified: boolean
+  contactVerified: boolean
+  verifiedAt?: string
+  level: OwnerVerificationLevel
+}
 export type ExchangeStatus =
   | 'Requested'
   | 'Accepted'
@@ -40,6 +63,7 @@ export interface User {
   hostel: string
   distanceMeters: number
   badges: string[]
+  verification: OwnerVerification
   suspended?: boolean
   flagged?: boolean
 }
@@ -69,6 +93,7 @@ export interface Resource {
   rating: number
   timesBorrowed: number
   approvalStatus: 'Approved' | 'Pending' | 'Rejected'
+  verification: ResourceVerification
   flagged: boolean
   history: {
     exchangeId: string

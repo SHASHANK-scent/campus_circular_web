@@ -1,16 +1,33 @@
 import { Link, useParams } from 'react-router-dom'
-import { ArrowLeft, BadgeCheck, BookOpen, CircleUserRound, MapPin, Trophy } from 'lucide-react'
+import {
+  ArrowLeft,
+  BadgeCheck,
+  CheckCircle2,
+  CircleUserRound,
+  MapPin,
+  Trophy,
+  XCircle,
+} from 'lucide-react'
 import { Badge, money, PageTitle } from '../components/Layout'
+import { OwnerVerificationBadge, VerificationBadge } from '../components/VerificationBadge'
+import { ResourceImage } from '../components/ResourceImage'
 import { formatDate } from '../lib/clock'
+import { isPubliclyListed, ownerVerificationLevel } from '../lib/verification'
 import { useApp } from '../store/AppStore'
 export const Profile = () => {
   const { id } = useParams()
   const { state } = useApp()
   const user = state.users.find((item) => item.id === id) ?? state.users[0]
   const listed = state.resources.filter(
-    (resource) =>
-      resource.ownerId === user.id && resource.approvalStatus === 'Approved' && !resource.removed,
+    (resource) => resource.ownerId === user.id && !resource.removed,
   )
+  const verifiedListings = listed.filter(isPubliclyListed)
+  const level = ownerVerificationLevel(user.verification)
+  const ownerChecks: [string, boolean][] = [
+    ['College ID card checked', user.verification.identityVerified],
+    ['Enrolment and department confirmed', user.verification.campusVerified],
+    ['Phone and email confirmed', user.verification.contactVerified],
+  ]
   const exchanges = state.exchanges.filter(
     (exchange) => exchange.ownerId === user.id || exchange.borrowerId === user.id,
   )
@@ -31,6 +48,9 @@ export const Profile = () => {
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-3xl font-black">{user.name}</h1>
               {user.verified && <BadgeCheck className="h-5 w-5 text-emerald-300" />}
+              <span className="rounded-lg border border-white/20 bg-white/10 px-2 py-1 text-[10px] font-bold text-emerald-200">
+                {level}
+              </span>
             </div>
             <p className="mt-2 text-sm text-slate-300">
               {user.department} · {user.year} · {user.hostel}
@@ -62,6 +82,44 @@ export const Profile = () => {
           </div>
         ))}
       </div>
+      <section className="mt-7 rounded-2xl border border-slate-200 bg-white p-6">
+        <PageTitle eyebrow="Trust evidence" title="How this member was verified" />
+        <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
+          <div>
+            <OwnerVerificationBadge user={user} />
+            <ul className="mt-4 space-y-2">
+              {ownerChecks.map(([label, done]) => (
+                <li className="flex items-center gap-2 text-xs text-slate-600" key={label}>
+                  {done ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-slate-400" />
+                  )}
+                  {label}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-3 text-[11px] text-slate-500">
+              {user.verification.verifiedAt
+                ? `Verified on ${formatDate(user.verification.verifiedAt)}`
+                : 'No campus verification on record yet.'}
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {[
+              ['Verified listings', `${verifiedListings.length} of ${listed.length}`],
+              ['Successful exchanges', user.successfulExchanges],
+              ['Late returns', user.lateReturns],
+              ['Disputes', user.disputes],
+            ].map(([label, value]) => (
+              <div className="rounded-xl bg-slate-50 p-4" key={label}>
+                <p className="text-lg font-black">{value}</p>
+                <p className="mt-1 text-[11px] font-semibold text-slate-500">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
       <div className="mt-9 grid gap-8 lg:grid-cols-[1fr_340px]">
         <section>
           <PageTitle eyebrow="Community reputation" title="Badges & activity" />
@@ -87,14 +145,15 @@ export const Profile = () => {
                 className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:border-emerald-300"
                 key={resource.id}
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50">
-                  <BookOpen className="h-5 w-5 text-emerald-600" />
-                </div>
+                <ResourceImage resource={resource} small />
                 <div className="min-w-0">
                   <p className="truncate text-xs font-extrabold">{resource.title}</p>
                   <p className="mt-1 text-[11px] text-slate-500">
                     {money(resource.dailyCharge)} / day · {resource.condition}
                   </p>
+                  <div className="mt-2">
+                    <VerificationBadge resource={resource} />
+                  </div>
                 </div>
               </Link>
             ))}

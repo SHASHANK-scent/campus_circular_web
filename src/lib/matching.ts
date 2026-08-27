@@ -1,5 +1,6 @@
 import type { Category, PlatformConfig, Resource, User } from '../data/types'
 import { calculatePricing } from './pricing'
+import { isPubliclyListed } from './verification'
 export interface ParsedIntent {
   raw: string
   tags: string[]
@@ -239,7 +240,7 @@ export const matchIntent = (
   return slotTerms.map((tag) => {
     const matches = resources
       .filter((resource) => !usedResourceIds.has(resource.id))
-      .filter((resource) => resource.approvalStatus === 'Approved' && !resource.removed)
+      .filter(isPubliclyListed)
       .filter((resource) => {
         const title = resource.title.toLowerCase()
         const primaryTag = normalizeTerm(resource.tags[0] ?? '')

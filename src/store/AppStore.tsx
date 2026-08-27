@@ -10,19 +10,25 @@ import { seedState } from '../data/seed'
 import type {
   AppState,
   CommunityRequest,
+  Condition,
   ConditionReport,
+  EquipmentCheck,
   Exchange,
+  OwnerVerification,
   Payment,
   PlatformConfig,
   Rating,
   Resource,
+  ResourceVerification,
+  User,
 } from '../data/types'
 import { advanceClock } from '../lib/clock'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { settleCharges } from '../lib/pricing'
+import { allChecksPassed, isPubliclyListed } from '../lib/verification'
 
 const KEY = 'cc.state.v1'
-export const STATE_VERSION = 6
+export const STATE_VERSION = 7
 
 export type Action =
   | { type: 'advance'; hours: number }
@@ -46,6 +52,15 @@ export type Action =
   | { type: 'createRequest'; request: CommunityRequest }
   | { type: 'respondRequest'; requestId: string; resourceId: string; note: string }
   | { type: 'adminUser'; userId: string; action: 'verify' | 'suspend' | 'flag' }
+  | { type: 'startInspection'; resourceId: string }
+  | {
+      type: 'verifyResource'
+      resourceId: string
+      checks: EquipmentCheck[]
+      verifiedCondition: Condition
+      note?: string
+    }
+  | { type: 'rejectResource'; resourceId: string; note: string; checks?: EquipmentCheck[] }
   | {
       type: 'adminResource'
       resourceId: string
@@ -80,6 +95,43 @@ const isPayment = (value: unknown): value is Payment => {
   )
 }
 
+const isEquipmentCheck = (value: unknown): value is EquipmentCheck => {
+  if (!value || typeof value !== 'object') return false
+  const check = value as Partial<EquipmentCheck>
+  return (
+    typeof check.label === 'string' &&
+    typeof check.passed === 'boolean' &&
+    (check.note === undefined || typeof check.note === 'string')
+  )
+}
+
+const isResourceVerification = (value: unknown): value is ResourceVerification => {
+  if (!value || typeof value !== 'object') return false
+  const verification = value as Partial<ResourceVerification>
+  return (
+    (verification.status === 'Submitted' ||
+      verification.status === 'Under Inspection' ||
+      verification.status === 'Verified' ||
+      verification.status === 'Rejected') &&
+    typeof verification.submittedAt === 'string' &&
+    Array.isArray(verification.checks) &&
+    verification.checks.every(isEquipmentCheck)
+  )
+}
+
+const isOwnerVerification = (value: unknown): value is OwnerVerification => {
+  if (!value || typeof value !== 'object') return false
+  const verification = value as Partial<OwnerVerification>
+  return (
+    typeof verification.identityVerified === 'boolean' &&
+    typeof verification.campusVerified === 'boolean' &&
+    typeof verification.contactVerified === 'boolean' &&
+    (verification.level === 'Unverified' ||
+      verification.level === 'Basic' ||
+      verification.level === 'Fully Verified')
+  )
+}
+
 const isAppState = (value: unknown): value is AppState => {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<AppState>
@@ -89,12 +141,20 @@ const isAppState = (value: unknown): value is AppState => {
       if (!exchange || typeof exchange !== 'object') return false
       return isPayment((exchange as Partial<Exchange>).payment)
     })
+  const verificationsValid =
+    Array.isArray(candidate.resources) &&
+    Array.isArray(candidate.users) &&
+    candidate.resources.every((resource) =>
+      isResourceVerification((resource as Partial<Resource> | null)?.verification),
+    ) &&
+    candidate.users.every((user) => isOwnerVerification((user as Partial<User> | null)?.verification))
   return (
     candidate.stateVersion === STATE_VERSION &&
     Array.isArray(candidate.users) &&
     Array.isArray(candidate.resources) &&
     Array.isArray(candidate.exchanges) &&
     paymentsValid &&
+    verificationsValid &&
     Array.isArray(candidate.requests) &&
     typeof candidate.currentUserId === 'string' &&
     typeof candidate.simulatedNow === 'string' &&
@@ -151,6 +211,8 @@ export const reducer = (state: AppState, action: Action): AppState => {
   if (action.type === 'switchUser') return { ...state, currentUserId: action.userId }
   if (action.type === 'admin') return { ...state, isAdmin: action.value }
   if (action.type === 'createExchange') {
+    const resource = state.resources.find((item) => item.id === action.exchange.resourceId)
+    if (!resource || !isPubliclyListed(resource)) return state
     return { ...state, exchanges: [...state.exchanges, action.exchange] }
   }
   if (action.type === 'payExchange') {
@@ -230,7 +292,82 @@ export const reducer = (state: AppState, action: Action): AppState => {
       ),
     }
   }
+  if (action.type === 'startInspection') {
+    const resource = state.resources.find((item) => item.id === action.resourceId)
+    if (!state.isAdmin || !resource || resource.verification.status !== 'Submitted') return state
+    return {
+      ...state,
+      resources: state.resources.map((item) =>
+        item.id === action.resourceId
+          ? {
+              ...item,
+              verification: {
+                ...item.verification,
+                status: 'Under Inspection' as const,
+                verifierId: state.currentUserId,
+              },
+            }
+          : item,
+      ),
+    }
+  }
+  if (action.type === 'verifyResource') {
+    const resource = state.resources.find((item) => item.id === action.resourceId)
+    if (!state.isAdmin || !resource || resource.verification.status === 'Verified') return state
+    if (!allChecksPassed(action.checks)) return state
+    return {
+      ...state,
+      resources: state.resources.map((item) =>
+        item.id === action.resourceId
+          ? {
+              ...item,
+              approvalStatus: 'Approved' as const,
+              condition: action.verifiedCondition,
+              verification: {
+                ...item.verification,
+                status: 'Verified' as const,
+                checks: action.checks,
+                verifiedCondition: action.verifiedCondition,
+                verifierId: state.currentUserId,
+                inspectedAt: state.simulatedNow,
+                ...(action.note ? { note: action.note } : {}),
+              },
+            }
+          : item,
+      ),
+    }
+  }
+  if (action.type === 'rejectResource') {
+    const resource = state.resources.find((item) => item.id === action.resourceId)
+    if (!state.isAdmin || !resource) return state
+    return {
+      ...state,
+      resources: state.resources.map((item) =>
+        item.id === action.resourceId
+          ? {
+              ...item,
+              approvalStatus: 'Rejected' as const,
+              verification: {
+                ...item.verification,
+                status: 'Rejected' as const,
+                checks: action.checks ?? item.verification.checks,
+                verifierId: state.currentUserId,
+                inspectedAt: state.simulatedNow,
+                note: action.note,
+              },
+            }
+          : item,
+      ),
+    }
+  }
   if (action.type === 'adminResource') {
+    const resource = state.resources.find((item) => item.id === action.resourceId)
+    if (
+      !resource ||
+      (action.action === 'approve' && resource.verification.status !== 'Verified')
+    ) {
+      return state
+    }
     return {
       ...state,
       resources: state.resources.map((resource) =>

@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, Camera, CheckCircle2, PackagePlus } from 'lucide
 import { Link, useNavigate } from 'react-router-dom'
 import type { Category, Condition, Resource } from '../data/types'
 import { imageToDataUrl } from '../lib/photos'
+import { newResourceVerification, STANDARD_CHECKS } from '../lib/verification'
 import { Badge, money, PageTitle } from '../components/Layout'
 import { ResourceImage } from '../components/ResourceImage'
 import { useApp } from '../store/AppStore'
@@ -76,6 +77,7 @@ export const ListResource = () => {
       rating: 0,
       timesBorrowed: 0,
       approvalStatus: 'Pending',
+      verification: newResourceVerification(state.simulatedNow),
       flagged: false,
       history: [],
       tags: [title.toLowerCase(), category.toLowerCase()],
@@ -89,8 +91,8 @@ export const ListResource = () => {
         <ArrowLeft className="h-4 w-4" /> Back to discover
       </Link>
       <PageTitle eyebrow="Grow the sharing library" title="List a resource">
-        <Badge tone="green">
-          <PackagePlus className="mr-1 inline h-3.5 w-3.5" /> Pending approval
+        <Badge tone="amber">
+          <PackagePlus className="mr-1 inline h-3.5 w-3.5" /> Equipment check required
         </Badge>
       </PageTitle>
       <div className="grid gap-7 lg:grid-cols-[1fr_340px]">
@@ -247,7 +249,7 @@ export const ListResource = () => {
                 onClick={save}
                 className="rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white"
               >
-                Submit for approval
+                Submit for equipment check
               </button>
             )}
           </div>
@@ -266,6 +268,19 @@ export const ListResource = () => {
               {money(dailyCharge)} <span className="text-xs font-normal text-slate-400">/ day</span>
             </p>
             <p className="mt-1 text-[11px] text-slate-500">+ {money(deposit)} refundable deposit</p>
+          </div>
+          <div className="mt-3 rounded-xl bg-amber-50 p-4 text-[11px] leading-5 text-amber-800">
+            <p className="font-bold">Before it goes live</p>
+            <p className="mt-1">
+              A campus verifier physically checks the full equipment. Your listing stays private
+              until every point below passes.
+            </p>
+            <ul className="mt-2 space-y-1">
+              {STANDARD_CHECKS.map((check) => (
+                <li key={check}>· {check}</li>
+              ))}
+            </ul>
+            <p className="mt-2">You can follow its progress from your profile listings.</p>
           </div>
         </aside>
       </div>

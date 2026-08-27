@@ -3,6 +3,8 @@ import { ArrowRight, Search, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Badge, money, PageTitle } from '../components/Layout'
 import { ResourceImage } from '../components/ResourceImage'
+import { VerificationBadge } from '../components/VerificationBadge'
+import { isPubliclyListed } from '../lib/verification'
 import { useApp } from '../store/AppStore'
 const cats = [
   'Camera & Video',
@@ -26,8 +28,7 @@ export const Discover = () => {
       state.resources
         .filter(
           (item) =>
-            item.approvalStatus === 'Approved' &&
-            !item.removed &&
+            isPubliclyListed(item) &&
             (category === 'All categories' || item.category === category),
         )
         .sort((a, b) =>
@@ -172,6 +173,9 @@ export const Discover = () => {
                     <Badge tone={resource.condition === 'Like New' ? 'green' : 'slate'}>
                       {resource.condition}
                     </Badge>
+                  </div>
+                  <div className="mt-2">
+                    <VerificationBadge resource={resource} />
                   </div>
                   <p className="mt-2 text-xs text-slate-500">
                     {resource.location} · {resource.distanceMeters}m away
