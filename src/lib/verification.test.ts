@@ -4,6 +4,7 @@ import type { AppState, Exchange } from '../data/types'
 import { reducer } from '../store/AppStore'
 import {
   allChecksPassed,
+  DESK_VERIFIER_ID,
   isFullyVerified,
   isPubliclyListed,
   ownerVerificationLevel,
@@ -132,6 +133,27 @@ describe('admin verification queue', () => {
     expect(resource.verification.verifiedCondition).toBe('Like New')
     expect(resource.approvalStatus).toBe('Approved')
     expect(isPubliclyListed(resource)).toBe(true)
+  })
+
+  it('attributes inspection of your own listing to the campus verification desk', () => {
+    const state = adminState()
+    const resource = submitted()
+    const owned = { ...resource, ownerId: 'u2' }
+    const withOwnListing: AppState = {
+      ...state,
+      resources: state.resources.map((item) => (item.id === resource.id ? owned : item)),
+    }
+    const verified = reducer(withOwnListing, {
+      type: 'verifyResource',
+      resourceId: resource.id,
+      checks: passedChecks,
+      verifiedCondition: 'Good',
+    })
+    const record = verified.resources.find((item) => item.id === resource.id)!.verification
+    expect(record.status).toBe('Verified')
+    expect(record.verifierId).not.toBe('u2')
+    expect(record.verifierId).toBe('u10')
+    expect(DESK_VERIFIER_ID).toBe('u2')
   })
 
   it('records a rejection with the failed check and keeps the item unlisted', () => {

@@ -25,7 +25,7 @@ import type {
 import { advanceClock } from '../lib/clock'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { settleCharges } from '../lib/pricing'
-import { allChecksPassed, isPubliclyListed } from '../lib/verification'
+import { allChecksPassed, isPubliclyListed, resolveVerifierId } from '../lib/verification'
 
 const KEY = 'cc.state.v1'
 export const STATE_VERSION = 7
@@ -304,7 +304,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
               verification: {
                 ...item.verification,
                 status: 'Under Inspection' as const,
-                verifierId: state.currentUserId,
+                verifierId: resolveVerifierId(resource, state.currentUserId),
               },
             }
           : item,
@@ -328,7 +328,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
                 status: 'Verified' as const,
                 checks: action.checks,
                 verifiedCondition: action.verifiedCondition,
-                verifierId: state.currentUserId,
+                verifierId: resolveVerifierId(resource, state.currentUserId),
                 inspectedAt: state.simulatedNow,
                 ...(action.note ? { note: action.note } : {}),
               },
@@ -351,7 +351,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
                 ...item.verification,
                 status: 'Rejected' as const,
                 checks: action.checks ?? item.verification.checks,
-                verifierId: state.currentUserId,
+                verifierId: resolveVerifierId(resource, state.currentUserId),
                 inspectedAt: state.simulatedNow,
                 note: action.note,
               },

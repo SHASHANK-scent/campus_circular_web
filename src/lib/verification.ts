@@ -26,6 +26,15 @@ export const ownerVerificationLevel = (
   return passed > 0 ? 'Basic' : 'Unverified'
 }
 
+export const CAMPUS_VERIFIER_IDS: string[] = ['u2', 'u10']
+
+export const DESK_VERIFIER_ID: string = CAMPUS_VERIFIER_IDS[0]
+
+export const resolveVerifierId = (resource: Resource, currentUserId: string): string => {
+  if (currentUserId !== resource.ownerId) return currentUserId
+  return CAMPUS_VERIFIER_IDS.find((id) => id !== resource.ownerId) ?? DESK_VERIFIER_ID
+}
+
 export const allChecksPassed = (checks: EquipmentCheck[]): boolean =>
   checks.length > 0 && checks.every((check) => check.passed)
 
