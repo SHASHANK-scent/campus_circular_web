@@ -8,9 +8,12 @@ import {
   Package,
   Wrench,
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import type { Resource } from '../data/types'
 
-type ResourceImageData = Partial<Pick<Resource, 'category' | 'id' | 'title' | 'images'>>
+type ResourceImageData = Partial<
+  Pick<Resource, 'category' | 'id' | 'title' | 'images' | 'imageUrl'>
+>
 const icons = {
   'Camera & Video': Camera,
   Audio: Headphones,
@@ -35,20 +38,29 @@ export const ResourceImage = ({
   resource: ResourceImageData
   small?: boolean
 }) => {
+  const imageSource = getResourceImageSource(resource)
+  const [imageFailed, setImageFailed] = useState(false)
+  useEffect(() => {
+    setImageFailed(false)
+  }, [imageSource])
   const category =
     resource.category && resource.category in icons ? resource.category : 'Event & Decor'
   const Icon = icons[category]
   const gradient = getResourceGradient(resource)
   return (
     <div
-      className={`relative flex ${small ? 'h-20 w-20 rounded-lg' : 'h-52 rounded-xl'} items-center justify-center overflow-hidden bg-gradient-to-br ${gradient}`}
+      className={`relative flex ${
+        small ? 'h-20 w-20 rounded-lg' : 'aspect-[4/3] w-full rounded-xl'
+      } items-center justify-center overflow-hidden bg-gradient-to-br ${gradient}`}
     >
       <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/30" />
-      {resource.images?.[0] ? (
+      {imageSource && !imageFailed ? (
         <img
-          src={resource.images[0]}
+          src={imageSource}
           alt={resource.title ?? 'Campus resource'}
           className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setImageFailed(true)}
         />
       ) : (
         <Icon
@@ -62,6 +74,9 @@ export const ResourceImage = ({
     </div>
   )
 }
+
+export const getResourceImageSource = (resource: ResourceImageData, imageFailed = false) =>
+  imageFailed ? undefined : (resource.imageUrl ?? resource.images?.[0])
 
 export const getResourceGradient = (resource: Partial<Pick<Resource, 'id' | 'title'>>) =>
   gradients[
