@@ -236,46 +236,12 @@ const catalog: [Category, string, string, string[]][] = [
 ]
 const owners = ['u2', 'u4', 'u7', 'u10', 'u1', 'u3']
 const conditions: Condition[] = ['Like New', 'Good', 'Good', 'Fair', 'Like New']
-const unsplash = (id: string) => `https://images.unsplash.com/${id}?w=800&q=80&auto=format&fit=crop`
-const seedImageUrls = [
-  unsplash('photo-1516035069371-29a1b244cc32'),
-  unsplash('photo-1502920917128-1aa500764cbd'),
-  unsplash('photo-1643917368299-e70c8432c541'),
-  unsplash('photo-1673196649671-eb09066ad6c1'),
-  unsplash('photo-1590602847861-f357a9332bbc'),
-  unsplash('photo-1763336320701-f4c23d1916aa'),
-  unsplash('photo-1505740420928-5e560c06d30e'),
-  unsplash('photo-1545454675-3531b543be5d'),
-  unsplash('photo-1496181133206-80ce9b88a853'),
-  unsplash('photo-1535016120720-40c646be5580'),
-  unsplash('photo-1716878906849-17ed9e9e6186'),
-  unsplash('photo-1587145820266-a5951ee6f620'),
-  unsplash('photo-1544947950-fa07a98d237f'),
-  unsplash('photo-1456324504439-367cee3b3c32'),
-  unsplash('photo-1495446815901-a7297e633e8d'),
-  unsplash('photo-1553062407-98eeb64c6a62'),
-  unsplash('photo-1504280390367-361c6d9f38f4'),
-  unsplash('photo-1626224583764-f87db24ac4ea'),
-  unsplash('photo-1553778263-73a83bab9b0c'),
-  unsplash('photo-1504148455328-c376907d081c'),
-  unsplash('photo-1530124566582-a618bc2615dc'),
-  unsplash('photo-1525201548942-d8732f6617a0'),
-  unsplash('photo-1649365810362-a5bf4414f1dc'),
-  unsplash('photo-1757933041628-f3ab597190fb'),
-  unsplash('photo-1646215096160-7fe20dfb7a32'),
-  unsplash('photo-1650501386688-41f6d0251875'),
-  unsplash('photo-1762325393954-5300a6e35f5b'),
-  unsplash('photo-1553406830-ef2513450d76'),
-  unsplash('photo-1650420790860-429e356f3194'),
-  unsplash('photo-1581092160607-ee22621dd758'),
-]
 export const seedResources: Resource[] = catalog.map(([category, title, tag, tags], index) => ({
   id: `r${index + 1}`,
   title,
   category,
   description: `A dependable ${title.toLowerCase()} shared by the campus community. Checked before every handover and ready for your next project.`,
   images: [],
-  imageUrl: seedImageUrls[index],
   ownerId: owners[index % owners.length],
   condition: conditions[index % conditions.length],
   accessories: ['Protective case', 'Quick-start guide'],
@@ -321,7 +287,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 4,
+  stateVersion: 5,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],

@@ -49,7 +49,6 @@ export interface Resource {
   category: Category
   description: string
   images: string[]
-  imageUrl?: string
   ownerId: UserId
   condition: Condition
   accessories: string[]

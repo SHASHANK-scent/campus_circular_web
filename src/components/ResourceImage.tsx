@@ -9,11 +9,10 @@ import {
   Wrench,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { resourcePhotos } from '../data/photos'
 import type { Resource } from '../data/types'
 
-type ResourceImageData = Partial<
-  Pick<Resource, 'category' | 'id' | 'title' | 'images' | 'imageUrl'>
->
+type ResourceImageData = Partial<Pick<Resource, 'category' | 'id' | 'title' | 'images'>>
 const icons = {
   'Camera & Video': Camera,
   Audio: Headphones,
@@ -76,7 +75,9 @@ export const ResourceImage = ({
 }
 
 export const getResourceImageSource = (resource: ResourceImageData, imageFailed = false) =>
-  imageFailed ? undefined : (resource.imageUrl ?? resource.images?.[0])
+  imageFailed
+    ? undefined
+    : ((resource.id ? resourcePhotos[resource.id] : undefined) ?? resource.images?.[0])
 
 export const getResourceGradient = (resource: Partial<Pick<Resource, 'id' | 'title'>>) =>
   gradients[

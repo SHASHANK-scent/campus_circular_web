@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { resourcePhotos } from '../data/photos'
 import { getResourceGradient, getResourceImageSource } from './ResourceImage'
 
 describe('ResourceImage draft support', () => {
@@ -9,8 +10,12 @@ describe('ResourceImage draft support', () => {
 
 describe('ResourceImage photo handling', () => {
   it('uses the seeded photo when one is present', () => {
-    expect(getResourceImageSource({ imageUrl: 'https://example.com/camera.jpg' })).toBe(
-      'https://example.com/camera.jpg',
+    expect(getResourceImageSource({ id: 'r1' })).toBe(resourcePhotos.r1)
+  })
+
+  it('prefers the mapped photo over a user-uploaded image', () => {
+    expect(getResourceImageSource({ id: 'r1', images: ['data:image/jpeg;base64,old'] })).toBe(
+      resourcePhotos.r1,
     )
   })
 
@@ -25,8 +30,6 @@ describe('ResourceImage photo handling', () => {
   })
 
   it('returns the placeholder state after a photo load error', () => {
-    expect(
-      getResourceImageSource({ imageUrl: 'https://example.com/missing.jpg' }, true),
-    ).toBeUndefined()
+    expect(getResourceImageSource({ id: 'r1' }, true)).toBeUndefined()
   })
 })
