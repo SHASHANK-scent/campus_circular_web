@@ -13,9 +13,7 @@ describe('matching engine', () => {
     expect(kit.map((slot) => slot.tag)).toEqual(
       expect.arrayContaining(['camera', 'tripod', 'microphone', 'lighting']),
     )
-    const primaryResources = kit
-      .slice(0, 5)
-      .map((slot) => slot.recommendation?.resource)
+    const primaryResources = kit.slice(0, 5).map((slot) => slot.recommendation?.resource)
     expect(primaryResources[0]?.tags[0]).toBe('camera')
     expect(primaryResources[0]?.id).not.toBe('r3')
     expect(primaryResources[1]?.id).toBe('r3')

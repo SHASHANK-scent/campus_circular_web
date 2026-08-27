@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Check, Clock3, Info, Send, Sparkles } from 'lucide-react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Badge, money, PageTitle } from '../components/Layout'
 import { KitSlotCard } from '../components/KitSlotCard'
 import { formatDate } from '../lib/clock'
@@ -10,6 +10,7 @@ import { useApp } from '../store/AppStore'
 export const Need = () => {
   const { state } = useApp()
   const [params] = useSearchParams()
+  const navigate = useNavigate()
   const [text, setText] = useState(
     params.get('q') ?? 'I need to make a reel for my club event tomorrow',
   )
@@ -203,7 +204,14 @@ export const Need = () => {
           <p className="text-[11px] leading-5 text-slate-500">
             Each item has a refundable security deposit. You’ll review an agreement per item next.
           </p>
-          <button className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700">
+          <button
+            disabled={selectedItems.length === 0}
+            onClick={() => {
+              const queue = selectedItems.map((item) => item.resource.id).join(',')
+              navigate(`/agreement/${selectedItems[0]?.resource.id}?queue=${queue}&index=0`)
+            }}
+            className="mt-5 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+          >
             <Send className="mr-1 inline h-3.5 w-3.5" /> Request selected items
           </button>
           <div className="mt-4 flex items-center gap-2 text-[10px] font-semibold text-emerald-700">

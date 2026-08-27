@@ -1,0 +1,100 @@
+import type {
+  ConditionReport,
+  Exchange,
+  ExchangeStatus,
+  PlatformConfig,
+  Rating,
+  Resource,
+} from '../data/types'
+import { calculatePricing, type PriceBreakdown } from './pricing'
+
+export const LIFECYCLE_STEPS: ExchangeStatus[] = [
+  'Requested',
+  'Accepted',
+  'Handover',
+  'Borrowed',
+  'Return Due',
+  'Returned',
+  'Inspection',
+  'Settlement',
+  'Rated',
+]
+
+export type ExchangeRole = 'owner' | 'borrower'
+
+export const roleFor = (exchange: Exchange, userId: string): ExchangeRole | null => {
+  if (exchange.ownerId === userId) return 'owner'
+  if (exchange.borrowerId === userId) return 'borrower'
+  return null
+}
+
+export const canTransition = (
+  exchange: Exchange,
+  next: ExchangeStatus,
+  role: ExchangeRole,
+): boolean => {
+  const allowed: Record<ExchangeStatus, { next: ExchangeStatus; roles: ExchangeRole[] }[]> = {
+    Requested: [
+      { next: 'Accepted', roles: ['owner'] },
+      { next: 'Rejected', roles: ['owner'] },
+    ],
+    Accepted: [{ next: 'Handover', roles: ['owner'] }],
+    Handover: [{ next: 'Borrowed', roles: ['owner'] }],
+    Borrowed: [
+      { next: 'Return Due', roles: ['borrower'] },
+      { next: 'Returned', roles: ['borrower'] },
+    ],
+    'Return Due': [{ next: 'Returned', roles: ['borrower'] }],
+    Returned: [{ next: 'Inspection', roles: ['owner'] }],
+    Inspection: [{ next: 'Settlement', roles: ['owner'] }],
+    Settlement: [{ next: 'Rated', roles: ['owner', 'borrower'] }],
+    Rated: [],
+    Rejected: [],
+    Cancelled: [],
+  }
+  return allowed[exchange.status].some(
+    (transition) => transition.next === next && transition.roles.includes(role),
+  )
+}
+
+export const settlementForExchange = (
+  exchange: Exchange,
+  resource: Resource,
+  config: PlatformConfig,
+  at: string,
+  damageDeduction = exchange.charges.damageDeduction,
+): PriceBreakdown =>
+  calculatePricing({
+    resource,
+    mode: exchange.plan.mode,
+    units: exchange.plan.units,
+    platform: config,
+    dueAt: exchange.plan.dueAt,
+    returnedAt: exchange.returnedAt ?? at,
+    damageDeduction,
+  })
+
+export const withTimeline = (
+  exchange: Exchange,
+  status: ExchangeStatus,
+  at: string,
+  note?: string,
+): Exchange => ({
+  ...exchange,
+  status,
+  timeline: [...exchange.timeline, { status, at, note }],
+})
+
+export const applyRating = (exchange: Exchange, role: ExchangeRole, rating: Rating): Exchange => ({
+  ...exchange,
+  ...(role === 'owner' ? { ratingByOwner: rating } : { ratingByBorrower: rating }),
+})
+
+export const applyConditionReport = (
+  exchange: Exchange,
+  role: ExchangeRole,
+  report: ConditionReport,
+): Exchange => ({
+  ...exchange,
+  ...(role === 'owner' ? { after: report } : { before: report }),
+})
