@@ -1,0 +1,79 @@
+import type { AppState, Category, Condition, Resource, User } from './types'
+
+const now = new Date('2025-03-15T10:00:00+05:30')
+const iso = (days: number, hours = 0) => new Date(now.getTime() + (days * 24 + hours) * 3600000).toISOString()
+export const seedUsers: User[] = [
+  { id: 'u1', name: 'Aarav Menon', avatarInitials: 'AM', department: 'Computer Science', year: '3rd year', verified: true, trustScore: 86, rating: 4.8, ratingsCount: 24, successfulExchanges: 31, lateReturns: 1, disputes: 0, joinedOn: '2023-08-12', hostel: 'Azad Hall', distanceMeters: 0, badges: ['Early adopter', 'Reliable lender', 'Community builder'] },
+  { id: 'u2', name: 'Ishita Rao', avatarInitials: 'IR', department: 'Mass Communication', year: '2nd year', verified: true, trustScore: 94, rating: 4.9, ratingsCount: 42, successfulExchanges: 54, lateReturns: 0, disputes: 0, joinedOn: '2022-07-10', hostel: 'Ganga Hostel', distanceMeters: 450, badges: ['Top lender', 'Verified identity'] },
+  { id: 'u3', name: 'Kabir Shah', avatarInitials: 'KS', department: 'Mechanical Engineering', year: '4th year', verified: true, trustScore: 78, rating: 4.5, ratingsCount: 18, successfulExchanges: 22, lateReturns: 2, disputes: 0, joinedOn: '2023-01-17', hostel: 'Tagore House', distanceMeters: 800, badges: ['Fixer'] },
+  { id: 'u4', name: 'Meera Iyer', avatarInitials: 'MI', department: 'Design', year: '3rd year', verified: true, trustScore: 91, rating: 4.7, ratingsCount: 28, successfulExchanges: 38, lateReturns: 1, disputes: 0, joinedOn: '2022-09-04', hostel: 'Nalanda Hall', distanceMeters: 1200, badges: ['Event helper', 'Top lender'] },
+  { id: 'u5', name: 'Rohan Das', avatarInitials: 'RD', department: 'Physics', year: '1st year', verified: true, trustScore: 41, rating: 3.4, ratingsCount: 9, successfulExchanges: 12, lateReturns: 2, disputes: 1, joinedOn: '2024-07-22', hostel: 'Azad Hall', distanceMeters: 300, badges: ['New member'] },
+  { id: 'u6', name: 'Zoya Khan', avatarInitials: 'ZK', department: 'Economics', year: '2nd year', verified: false, trustScore: 67, rating: 4.2, ratingsCount: 11, successfulExchanges: 14, lateReturns: 1, disputes: 0, joinedOn: '2023-11-02', hostel: 'Ganga Hostel', distanceMeters: 1700, badges: [] },
+  { id: 'u7', name: 'Dev Patel', avatarInitials: 'DP', department: 'Electrical Engineering', year: '4th year', verified: true, trustScore: 88, rating: 4.8, ratingsCount: 31, successfulExchanges: 45, lateReturns: 0, disputes: 0, joinedOn: '2022-08-19', hostel: 'Tagore House', distanceMeters: 650, badges: ['Lab pro'] },
+  { id: 'u8', name: 'Ananya Sen', avatarInitials: 'AS', department: 'Literature', year: '3rd year', verified: true, trustScore: 83, rating: 4.6, ratingsCount: 15, successfulExchanges: 19, lateReturns: 1, disputes: 0, joinedOn: '2023-05-11', hostel: 'Nalanda Hall', distanceMeters: 950, badges: ['Bookworm'] },
+  { id: 'u9', name: 'Neil Thomas', avatarInitials: 'NT', department: 'Civil Engineering', year: '2nd year', verified: true, trustScore: 73, rating: 4.1, ratingsCount: 8, successfulExchanges: 9, lateReturns: 1, disputes: 0, joinedOn: '2024-01-08', hostel: 'Azad Hall', distanceMeters: 1400, badges: [] },
+  { id: 'u10', name: 'Tara Kapoor', avatarInitials: 'TK', department: 'Music', year: '4th year', verified: true, trustScore: 96, rating: 5, ratingsCount: 36, successfulExchanges: 49, lateReturns: 0, disputes: 0, joinedOn: '2022-06-03', hostel: 'Ganga Hostel', distanceMeters: 1100, badges: ['Top lender', 'Perfect record'] },
+]
+
+const catalog: [Category, string, string, string[]][] = [
+  ['Camera & Video', 'Sony ZV-E10 Creator Camera', 'camera', ['camera', 'reel', 'video', 'shoot']],
+  ['Camera & Video', 'DJI Osmo Pocket 3', 'camera', ['camera', 'vlog', 'video']],
+  ['Camera & Video', 'Carbon Fibre Tripod', 'tripod', ['tripod', 'camera', 'shoot']],
+  ['Camera & Video', 'Ring Light with Stand', 'light', ['lighting', 'light', 'reel']],
+  ['Audio', 'Rode VideoMic Pro', 'microphone', ['microphone', 'audio', 'reel']],
+  ['Audio', 'Zoom H1n Audio Recorder', 'recorder', ['audio recorder', 'record', 'podcast']],
+  ['Audio', 'Bose QuietComfort Headphones', 'headphones', ['headphones', 'audio', 'podcast']],
+  ['Audio', 'JBL PartyBox Speaker', 'speaker', ['speaker', 'event', 'music']],
+  ['Computing', 'MacBook Air M2', 'laptop', ['laptop', 'presentation', 'project']],
+  ['Computing', 'Epson Portable Projector', 'projector', ['projector', 'presentation', 'seminar']],
+  ['Computing', 'Logitech Presentation Clicker', 'clicker', ['clicker', 'presentation']],
+  ['Computing', 'Scientific Calculator', 'calculator', ['calculator', 'exam', 'study']],
+  ['Books', 'Data Structures Textbook', 'textbook', ['textbook', 'exam', 'study']],
+  ['Books', 'CAT Quant Prep Notes', 'notes', ['notes', 'exam', 'study']],
+  ['Books', 'The Design of Everyday Things', 'book', ['book', 'design']],
+  ['Sports', 'Decathlon Trekking Backpack', 'backpack', ['backpack', 'trek', 'hike']],
+  ['Sports', 'Two-person Camping Tent', 'tent', ['tent', 'camp', 'trek']],
+  ['Sports', 'Badminton Racket Pair', 'badminton racket', ['badminton racket', 'sports']],
+  ['Sports', 'Leather Football', 'football', ['football', 'match', 'sports']],
+  ['Tools', 'Bosch Cordless Drill', 'drill', ['drill', 'tools', 'project']],
+  ['Tools', 'Allen Key & Repair Kit', 'tools', ['tools', 'repair']],
+  ['Music', 'Yamaha Acoustic Guitar', 'guitar', ['guitar', 'music', 'jam']],
+  ['Music', 'Casio Portable Keyboard', 'keyboard', ['keyboard', 'music', 'band']],
+  ['Music', 'Orange Practice Amplifier', 'amplifier', ['amplifier', 'music', 'band']],
+  ['Music', 'Cajon Percussion Box', 'cajon', ['cajon', 'music', 'jam']],
+  ['Event & Decor', 'Heavy Duty Extension Board', 'extension board', ['extension board', 'event', 'stage']],
+  ['Event & Decor', 'Modular Banner Stand', 'banner stand', ['banner stand', 'decor', 'event']],
+  ['Lab & Electronics', 'Arduino Starter Kit', 'arduino kit', ['arduino kit', 'circuit', 'lab']],
+  ['Lab & Electronics', 'Digital Multimeter', 'multimeter', ['multimeter', 'circuit', 'lab']],
+  ['Lab & Electronics', 'Soldering Iron Station', 'soldering iron', ['soldering iron', 'project', 'circuit']],
+]
+const owners = ['u2', 'u4', 'u7', 'u10', 'u1', 'u3']
+const conditions: Condition[] = ['Like New', 'Good', 'Good', 'Fair', 'Like New']
+export const seedResources: Resource[] = catalog.map(([category, title, tag, tags], index) => ({
+  id: `r${index + 1}`, title, category, description: `A dependable ${title.toLowerCase()} shared by the campus community. Checked before every handover and ready for your next project.`,
+  images: [], ownerId: owners[index % owners.length], condition: conditions[index % conditions.length], accessories: ['Protective case', 'Quick-start guide'], location: ['Innovation Lab', 'Ganga Hostel common room', 'Central Library', 'Student Activity Centre'][index % 4],
+  distanceMeters: 180 + ((index * 173) % 1750), hourlyCharge: 8 + (index % 5) * 4, dailyCharge: 80 + (index % 7) * 30, minimumCharge: 40 + (index % 3) * 20, deposit: 300 + (index % 6) * 150, lateFeePerHour: 10 + (index % 4) * 5,
+  availability: { status: index === 1 ? 'Borrowed' : index === 27 ? 'Unavailable' : 'Available', nextFreeFrom: index === 1 ? iso(1) : undefined, blockedRanges: index % 6 === 0 ? [{ from: iso(2), to: iso(3) }] : [] },
+  borrowingConditions: ['Keep indoors and return with all accessories', 'Student ID required at handover'], rating: 4.1 + (index % 9) / 10, timesBorrowed: 5 + index * 2, approvalStatus: index >= 27 ? 'Pending' : 'Approved', flagged: index === 4, history: index % 4 === 0 ? [{ exchangeId: `ex${(index % 6) + 1}`, borrowerId: `u${(index % 8) + 1}`, onTime: index % 8 !== 0, endedOn: iso(-index - 1), note: 'Returned in great shape' }] : [], tags: [tag, ...tags, category.toLowerCase()],
+}))
+
+export const seedState: AppState = {
+  users: seedUsers, resources: seedResources, exchanges: [], requests: [
+    { id: 'req1', byUserId: 'u8', text: 'Need a projector for our literature society screening', category: 'Computing', neededFrom: iso(3), neededTo: iso(3, 4), status: 'Open', responses: [{ userId: 'u1', resourceId: 'r10', note: 'Happy to help!', at: iso(-1) }] },
+    { id: 'req2', byUserId: 'u5', text: 'Looking for a badminton racket this weekend', category: 'Sports', neededFrom: iso(5), neededTo: iso(6), status: 'Open', responses: [] },
+    { id: 'req3', byUserId: 'u6', text: 'Anyone have a soldering iron for a circuit project?', category: 'Lab & Electronics', neededFrom: iso(2), neededTo: iso(2, 6), status: 'Fulfilled', responses: [] },
+  ], config: { platformFeePercent: 5, platformFeeMin: 10, platformFeeMax: 150, gracePeriodMinutes: 30 }, currentUserId: 'u1', simulatedNow: now.toISOString(), isAdmin: false,
+}
+
+export const seedExchanges = (): AppState['exchanges'] => {
+  const plans = [
+    ['r1', 'u2', 'Requested', 1], ['r3', 'u1', 'Borrowed', 2], ['r5', 'u5', 'Return Due', 1], ['r8', 'u6', 'Inspection', 1],
+    ['r10', 'u1', 'Settlement', 2], ['r22', 'u8', 'Rated', 3], ['r28', 'u9', 'Accepted', 1], ['r29', 'u1', 'Handover', 1],
+  ] as const
+  return plans.map(([resourceId, borrowerId, status, units], index) => {
+    const resource = seedResources.find((item) => item.id === resourceId) ?? seedResources[0]
+    const startAt = iso(-index - 1); const dueAt = iso(-index + units)
+    return { id: `ex${index + 1}`, resourceId, ownerId: resource.ownerId, borrowerId, createdOn: iso(-index - 2), status, timeline: [{ status: 'Requested' as const, at: iso(-index - 2) }, { status, at: iso(-index) }], plan: { mode: 'daily' as const, units, startAt, dueAt }, charges: { borrowFee: Math.max(resource.minimumCharge, resource.dailyCharge * units), platformFee: 30, deposit: resource.deposit, lateFee: status === 'Return Due' ? resource.lateFeePerHour * 2 : 0, damageDeduction: status === 'Inspection' ? 250 : 0 }, purpose: index === 0 ? 'Club content shoot' : 'Campus project', dispute: status === 'Inspection' ? { id: 'd1', raisedBy: resource.ownerId, type: 'Damage' as const, description: 'Small scratch found on the body during inspection.', evidence: [], claimedAmount: 250, status: 'Open' as const, raisedOn: iso(-1) } : undefined, returnedAt: status === 'Inspection' || status === 'Settlement' || status === 'Rated' ? iso(-1) : undefined, ratingByOwner: status === 'Rated' ? { stars: 5, comment: 'Super smooth exchange!', at: iso(-1) } : undefined }
+  })
+}
+seedState.exchanges = seedExchanges()
