@@ -24,7 +24,14 @@ export const AdminTabs = () => {
   const [feeMin, setFeeMin] = useState(state.config.platformFeeMin)
   const [feeMax, setFeeMax] = useState(state.config.platformFeeMax)
   const [grace, setGrace] = useState(state.config.gracePeriodMinutes)
-  const revenue = state.exchanges.reduce((sum, exchange) => sum + exchange.charges.platformFee, 0)
+  const revenue = state.exchanges
+    .filter(
+      (exchange) => exchange.payment.status === 'Paid' || exchange.payment.status === 'Refunded',
+    )
+    .reduce((sum, exchange) => sum + exchange.charges.platformFee, 0)
+  const pendingPayments = state.exchanges.filter(
+    (exchange) => exchange.payment.status === 'Pending',
+  ).length
   const impact = aggregateImpact(state)
   const filteredExchanges = useMemo(
     () =>
@@ -49,7 +56,12 @@ export const AdminTabs = () => {
         )}
       </div>
       {tab === 'Overview' && (
-        <Overview revenue={revenue} state={state} revenueOverTime={impact.feeRevenueOverTime} />
+        <Overview
+          revenue={revenue}
+          pendingPayments={pendingPayments}
+          state={state}
+          revenueOverTime={impact.feeRevenueOverTime}
+        />
       )}
       {tab === 'Users' && <UsersPanel />}
       {tab === 'Resources' && <ResourcesPanel />}
@@ -402,16 +414,19 @@ export const AdminTabs = () => {
 
 const Overview = ({
   revenue,
+  pendingPayments,
   state,
   revenueOverTime,
 }: {
   revenue: number
+  pendingPayments: number
   state: ReturnType<typeof useApp>['state']
   revenueOverTime: { label: string; revenue: number }[]
 }) => (
   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     {[
       ['Platform revenue', money(revenue)],
+      ['Pending payments', pendingPayments],
       [
         'Active exchanges',
         state.exchanges.filter(

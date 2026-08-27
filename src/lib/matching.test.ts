@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { matchIntent, parseIntent } from './matching'
-import { seedResources, seedUsers } from '../data/seed'
+import { seedResources, seedState, seedUsers } from '../data/seed'
 describe('matching engine', () => {
   it('parses the reel prompt into a one-day window and kit slots', () => {
     const current = new Date('2025-03-15T10:00:00.000Z')
@@ -9,7 +9,7 @@ describe('matching engine', () => {
     expect(intent.mode).toBe('daily')
     expect(intent.units).toBe(1)
     expect(new Date(intent.dueAt).getTime() - new Date(intent.startAt).getTime()).toBe(86400000)
-    const kit = matchIntent(intent, seedResources, seedUsers)
+    const kit = matchIntent(intent, seedResources, seedUsers, seedState.config)
     expect(kit.map((slot) => slot.tag)).toEqual(
       expect.arrayContaining(['camera', 'tripod', 'microphone', 'lighting']),
     )
@@ -29,7 +29,7 @@ describe('matching engine', () => {
     const intent = parseIntent('I need a reel tomorrow', new Date('2025-03-15T10:00:00.000Z'))
     const tripodOnly = seedResources.find((resource) => resource.id === 'r3')
     expect(tripodOnly).toBeDefined()
-    const kit = matchIntent(intent, [tripodOnly!], seedUsers)
+    const kit = matchIntent(intent, [tripodOnly!], seedUsers, seedState.config)
     expect(kit.find((slot) => slot.tag === 'camera')?.recommendation).toBeUndefined()
   })
 })

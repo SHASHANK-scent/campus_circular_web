@@ -45,6 +45,33 @@ export const ExchangeSidebar = ({
               Reject
             </button>
           </div>
+        ) : exchange.status === 'Accepted' && role === 'owner' ? (
+          <div className="mt-4">
+            {exchange.payment.status === 'Pending' ? (
+              <>
+                <p className="text-xs font-bold text-amber-700">Waiting for borrower payment</p>
+                <p className="mt-2 text-xs text-slate-500">
+                  Confirm handover is disabled until the agreed transaction amount is paid.
+                </p>
+                <button
+                  disabled
+                  className="mt-4 w-full cursor-not-allowed rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white opacity-50"
+                >
+                  Confirm handover
+                </button>
+              </>
+            ) : (
+              <p className="text-xs text-slate-500">
+                Payment received. Record the handover condition on the left.
+              </p>
+            )}
+          </div>
+        ) : exchange.status === 'Accepted' && role === 'borrower' ? (
+          <p className="mt-3 text-xs text-slate-500">
+            {exchange.payment.status === 'Pending'
+              ? 'Complete the payment panel on the left before handover.'
+              : 'Payment received. The owner can now prepare handover.'}
+          </p>
         ) : exchange.status === 'Handover' && role === 'owner' ? (
           <button
             onClick={() => transition('Borrowed', 'Resource handed over.')}
@@ -67,6 +94,36 @@ export const ExchangeSidebar = ({
           )
         ) : exchange.status === 'Returned' && role === 'owner' ? (
           <p className="mt-3 text-xs text-slate-500">Complete the return inspection on the left.</p>
+        ) : exchange.status === 'Settlement' &&
+          role === 'owner' &&
+          exchange.payment.status !== 'Refunded' ? (
+          <>
+            {exchange.dispute && (
+              <label className="mt-4 block text-xs font-bold text-slate-600">
+                Approved damage deduction
+                <input
+                  type="number"
+                  min="0"
+                  max={exchange.charges.deposit}
+                  value={adminDeduction}
+                  onChange={(event) => setAdminDeduction(Number(event.target.value))}
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+                />
+              </label>
+            )}
+            <button
+              onClick={() =>
+                dispatch({
+                  type: 'settle',
+                  exchangeId: exchange.id,
+                  damageDeduction: exchange.dispute ? adminDeduction : undefined,
+                })
+              }
+              className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white"
+            >
+              Settle now
+            </button>
+          </>
         ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
           role === 'borrower' &&
           !exchange.ratingByBorrower ? (
@@ -91,34 +148,6 @@ export const ExchangeSidebar = ({
           <p className="mt-3 text-xs text-slate-500">Waiting for the owner to leave a rating.</p>
         ) : exchange.status === 'Rated' ? (
           <p className="mt-3 text-xs text-slate-500">Exchange complete.</p>
-        ) : exchange.status === 'Settlement' && role === 'owner' ? (
-          <>
-            {exchange.dispute && (
-              <label className="mt-4 block text-xs font-bold text-slate-600">
-                Approved damage deduction
-                <input
-                  type="number"
-                  min="0"
-                  max={resource.deposit}
-                  value={adminDeduction}
-                  onChange={(event) => setAdminDeduction(Number(event.target.value))}
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
-                />
-              </label>
-            )}
-            <button
-              onClick={() =>
-                dispatch({
-                  type: 'settle',
-                  exchangeId: exchange.id,
-                  damageDeduction: exchange.dispute ? adminDeduction : undefined,
-                })
-              }
-              className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white"
-            >
-              Settle now
-            </button>
-          </>
         ) : (
           <p className="mt-3 text-xs text-slate-500">No action required from you right now.</p>
         )}

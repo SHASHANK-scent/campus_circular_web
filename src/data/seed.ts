@@ -1,4 +1,12 @@
-import type { AppState, Category, Condition, Resource, User } from './types'
+import type {
+  AppState,
+  Category,
+  Condition,
+  Payment,
+  Resource,
+  User,
+} from './types'
+import { settleCharges } from '../lib/pricing'
 
 const now = new Date('2025-03-15T10:00:00+05:30')
 const iso = (days: number, hours = 0) =>
@@ -287,7 +295,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 5,
+  stateVersion: 6,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],
@@ -376,6 +384,46 @@ export const seedExchanges = (): AppState['exchanges'] => {
       ],
       notes: 'Scratch documented during return inspection.',
     }
+    const borrowFee = Math.max(resource.minimumCharge, resource.dailyCharge * units)
+    const charges = {
+      borrowFee,
+      platformFee: Math.min(150, Math.max(10, Math.round(borrowFee * 0.05))),
+      deposit: resource.deposit,
+      lateFee: status === 'Return Due' ? resource.lateFeePerHour * 2 : 0,
+      damageDeduction: status === 'Inspection' ? 250 : 0,
+    }
+    const settlement = settleCharges({
+      charges,
+      lateFeePerHour: resource.lateFeePerHour,
+      gracePeriodMinutes: 30,
+      dueAt,
+      returnedAt: returnedOn,
+      damageDeduction: charges.damageDeduction,
+    })
+    const paymentStatus: Payment['status'] =
+      status === 'Settlement' || status === 'Rated'
+        ? 'Refunded'
+        : ['Handover', 'Borrowed', 'Return Due', 'Returned', 'Inspection'].includes(status)
+          ? 'Paid'
+          : 'Pending'
+    const payment: Payment = {
+      status: paymentStatus,
+      method: 'Campus Wallet',
+      amount: charges.borrowFee + charges.platformFee + charges.deposit,
+      txnId: `CC-PAY-${index + 1}`,
+      ...(paymentStatus === 'Paid' || paymentStatus === 'Refunded'
+        ? { paidAt: startAt }
+        : {}),
+      ...(paymentStatus === 'Refunded'
+        ? {
+            refund: {
+              amount: settlement.refund,
+              txnId: `CC-RFD-ex${index + 1}`,
+              at: returnedOn,
+            },
+          }
+        : {}),
+    }
     return {
       id: `ex${index + 1}`,
       resourceId,
@@ -388,13 +436,8 @@ export const seedExchanges = (): AppState['exchanges'] => {
         { status, at: startAt },
       ],
       plan: { mode: 'daily' as const, units, startAt, dueAt },
-      charges: {
-        borrowFee: Math.max(resource.minimumCharge, resource.dailyCharge * units),
-        platformFee: 30,
-        deposit: resource.deposit,
-        lateFee: status === 'Return Due' ? resource.lateFeePerHour * 2 : 0,
-        damageDeduction: status === 'Inspection' ? 250 : 0,
-      },
+      charges,
+      payment,
       purpose: index === 0 ? 'Club content shoot' : 'Campus project',
       dispute:
         status === 'Inspection'

@@ -1,6 +1,6 @@
 import { useState, type Dispatch } from 'react'
-import { AlertTriangle, FileWarning, Star } from 'lucide-react'
-import type { Exchange, PlatformConfig, Rating, Resource } from '../data/types'
+import { AlertTriangle, CreditCard, FileWarning, Star } from 'lucide-react'
+import type { Exchange, Payment, PlatformConfig, Rating, Resource } from '../data/types'
 import { formatDate, formatRelative } from '../lib/clock'
 import { canTransition, roleFor, settlementForExchange } from '../lib/lifecycle'
 import { imageToDataUrl } from '../lib/photos'
@@ -101,6 +101,97 @@ const RatingForm = ({ onSubmit, now }: { onSubmit: (rating: Rating) => void; now
   )
 }
 
+const PaymentPanel = ({
+  exchange,
+  dispatch,
+}: {
+  exchange: Exchange
+  dispatch: Dispatch<Action>
+}) => {
+  const [method, setMethod] = useState<Payment['method']>(exchange.payment.method)
+  return (
+    <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
+      <div className="flex items-start gap-3">
+        <CreditCard className="mt-0.5 h-5 w-5 text-emerald-700" />
+        <div>
+          <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">
+            Payment required
+          </p>
+          <h2 className="mt-1 text-xl font-black">Secure this borrowing request</h2>
+          <p className="mt-2 text-xs text-slate-600">
+            The owner accepted your request. Pay the agreed amount before handover.
+          </p>
+        </div>
+      </div>
+      <div className="mt-5 space-y-3 rounded-xl bg-white p-4 text-xs">
+        <div className="flex justify-between">
+          <span className="text-slate-500">Borrowing charge</span>
+          <b>{money(exchange.charges.borrowFee)}</b>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-slate-500">Platform fee</span>
+          <b>{money(exchange.charges.platformFee)}</b>
+        </div>
+        <div className="flex justify-between border-t border-slate-100 pt-3">
+          <span className="font-bold">Refundable deposit</span>
+          <b className="text-emerald-700">{money(exchange.charges.deposit)}</b>
+        </div>
+        <div className="flex justify-between border-t border-slate-100 pt-3 text-sm">
+          <span className="font-black">Transaction amount</span>
+          <b className="text-emerald-700">{money(exchange.payment.amount)}</b>
+        </div>
+      </div>
+      <label className="mt-4 block text-xs font-bold text-slate-600">
+        Payment method
+        <select
+          value={method}
+          onChange={(event) => setMethod(event.target.value as Payment['method'])}
+          className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs"
+        >
+          <option>Campus Wallet</option>
+          <option>UPI (simulated)</option>
+        </select>
+      </label>
+      <button
+        onClick={() => dispatch({ type: 'payExchange', exchangeId: exchange.id, method })}
+        className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white hover:bg-emerald-700"
+      >
+        Pay {money(exchange.payment.amount)}
+      </button>
+    </div>
+  )
+}
+
+const PaymentReceipt = ({ payment }: { payment: Payment }) => (
+  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-5">
+    <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Payment receipt</p>
+    <div className="mt-4 grid gap-3 text-xs sm:grid-cols-3">
+      <div>
+        <p className="text-slate-500">Method</p>
+        <p className="mt-1 font-bold">{payment.method}</p>
+      </div>
+      <div>
+        <p className="text-slate-500">Transaction ID</p>
+        <p className="mt-1 font-bold">{payment.txnId}</p>
+      </div>
+      <div>
+        <p className="text-slate-500">Paid at</p>
+        <p className="mt-1 font-bold">{payment.paidAt ? formatDate(payment.paidAt) : '—'}</p>
+      </div>
+    </div>
+    {payment.refund && (
+      <div className="mt-4 rounded-xl bg-white p-4 text-xs">
+        <p className="font-black text-emerald-800">Deposit refund receipt</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-3">
+          <span>Refunded {money(payment.refund.amount)}</span>
+          <span>{payment.refund.txnId}</span>
+          <span>{formatDate(payment.refund.at)}</span>
+        </div>
+      </div>
+    )}
+  </div>
+)
+
 export const ExchangeMainPanel = ({
   exchange,
   resource,
@@ -155,14 +246,45 @@ export const ExchangeMainPanel = ({
           </div>
         ) : null}
       </div>
+      {exchange.status === 'Accepted' &&
+        role === 'borrower' &&
+        exchange.payment.status === 'Pending' && (
+          <PaymentPanel exchange={exchange} dispatch={dispatch} />
+        )}
+      {(exchange.payment.status === 'Paid' || exchange.payment.status === 'Refunded') && (
+        <PaymentReceipt payment={exchange.payment} />
+      )}
       {exchange.status === 'Accepted' && role === 'owner' && (
-        <ConditionForm
-          heading="Record handover condition"
-          onSave={(report) => {
-            dispatch({ type: 'condition', exchangeId: exchange.id, report, side: 'before' })
-            transition('Handover', 'Handover condition recorded.')
-          }}
-        />
+        <>
+          <ConditionForm
+            heading="Record handover condition"
+            onSave={(report) => dispatch({ type: 'condition', exchangeId: exchange.id, report, side: 'before' })}
+          />
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+              Handover
+            </p>
+            {exchange.payment.status === 'Pending' ? (
+              <>
+                <h2 className="mt-2 text-lg font-black">Waiting for borrower payment</h2>
+                <p className="mt-2 text-xs text-slate-500">
+                  Handover can start after the borrower pays the agreed transaction amount.
+                </p>
+              </>
+            ) : (
+              <p className="mt-2 text-xs text-slate-500">
+                Confirm handover after both people have checked the condition.
+              </p>
+            )}
+            <button
+              disabled={exchange.payment.status === 'Pending' || !exchange.before}
+              onClick={() => transition('Handover', 'Handover condition recorded.')}
+              className="mt-4 rounded-xl bg-emerald-600 px-4 py-3 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Confirm handover
+            </button>
+          </div>
+        </>
       )}
       {exchange.status === 'Handover' && role === 'owner' && (
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">

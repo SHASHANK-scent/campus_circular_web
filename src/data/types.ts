@@ -104,6 +104,15 @@ export interface Rating {
   comment: string
   at: string
 }
+export type PaymentStatus = 'Pending' | 'Paid' | 'Refunded'
+export interface Payment {
+  status: PaymentStatus
+  method: 'Campus Wallet' | 'UPI (simulated)'
+  amount: number
+  txnId: string
+  paidAt?: string
+  refund?: { amount: number; txnId: string; at: string }
+}
 export interface Exchange {
   id: string
   resourceId: string
@@ -120,6 +129,7 @@ export interface Exchange {
     lateFee: number
     damageDeduction: number
   }
+  payment: Payment
   returnedAt?: string
   before?: ConditionReport
   after?: ConditionReport

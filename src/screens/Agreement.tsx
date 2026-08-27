@@ -52,6 +52,12 @@ export const Agreement = () => {
         lateFee: 0,
         damageDeduction: 0,
       },
+      payment: {
+        status: 'Pending',
+        method: 'Campus Wallet',
+        amount: pricing.payableUpfront,
+        txnId: `CC-PAY-${exchangeId.replace(/^ex-/, '')}`,
+      },
       purpose,
     }
     dispatch({ type: 'createExchange', exchange })
@@ -184,8 +190,8 @@ export const Agreement = () => {
             </div>
           </div>
           <p className="text-[11px] leading-5 text-slate-500">
-            The deposit is refundable after a clean return. No payment is taken until the owner
-            accepts.
+            The deposit is refundable after a clean return. Once the owner accepts, pay this
+            agreed amount before handover.
           </p>
           <label className="mt-5 flex gap-3 rounded-xl bg-emerald-50 p-3 text-xs font-bold text-emerald-900">
             <input

@@ -26,6 +26,13 @@ const baseExchange = (status: Exchange['status'] = 'Borrowed'): Exchange => ({
     lateFee: 0,
     damageDeduction: 0,
   },
+  payment: {
+    status: 'Paid',
+    method: 'Campus Wallet',
+    amount: 80 + 10 + resource.deposit,
+    txnId: 'CC-PAY-test',
+    paidAt: '2025-03-15T10:00:00.000Z',
+  },
 })
 
 describe('exchange lifecycle', () => {
@@ -63,6 +70,27 @@ describe('exchange lifecycle', () => {
     expect(pricing.lateFee).toBe(0)
     expect(pricing.refund).toBe(resource.deposit)
     expect(pricing.netToOwner).toBe(80)
+  })
+
+  it('freezes agreed charges when live pricing changes', () => {
+    const pricing = settlementForExchange(
+      {
+        ...baseExchange('Settlement'),
+        returnedAt: '2025-03-16T10:00:00.000Z',
+      },
+      { ...resource, dailyCharge: 9999, deposit: 1 },
+      {
+        platformFeePercent: 40,
+        platformFeeMin: 50,
+        platformFeeMax: 500,
+        gracePeriodMinutes: 30,
+      },
+      '2025-03-16T10:00:00.000Z',
+    )
+    expect(pricing.borrowFee).toBe(80)
+    expect(pricing.platformFee).toBe(10)
+    expect(pricing.deposit).toBe(resource.deposit)
+    expect(pricing.payableUpfront).toBe(80 + 10 + resource.deposit)
   })
 
   it('grows the late fee after the grace period', () => {
@@ -125,6 +153,96 @@ describe('exchange lifecycle', () => {
     expect(advanced.exchanges[0].charges.lateFee).toBe(resource.lateFeePerHour * 3)
   })
 
+  it('blocks handover until the borrower has paid', () => {
+    const state: AppState = {
+      stateVersion: 6,
+      users: [],
+      resources: [resource],
+      exchanges: [
+        {
+          ...baseExchange('Accepted'),
+          payment: { ...baseExchange('Accepted').payment, status: 'Pending' },
+        },
+      ],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+      },
+      currentUserId: 'u2',
+      simulatedNow: '2025-03-15T10:00:00.000Z',
+      isAdmin: false,
+    }
+    const blocked = reducer(state, {
+      type: 'transition',
+      exchangeId: 'test-exchange',
+      status: 'Handover',
+    })
+    expect(blocked.exchanges[0].status).toBe('Accepted')
+    const paid = {
+      ...state,
+      exchanges: [
+        {
+          ...state.exchanges[0],
+          payment: { ...state.exchanges[0].payment, status: 'Paid' as const },
+        },
+      ],
+    }
+    const allowed = reducer(paid, {
+      type: 'transition',
+      exchangeId: 'test-exchange',
+      status: 'Handover',
+    })
+    expect(allowed.exchanges[0].status).toBe('Handover')
+  })
+
+  it('allows only the borrower to pay, records the receipt, and ignores double payment', () => {
+    const pending = {
+      ...baseExchange('Accepted'),
+      payment: { ...baseExchange('Accepted').payment, status: 'Pending' as const },
+    }
+    const state: AppState = {
+      stateVersion: 6,
+      users: [],
+      resources: [resource],
+      exchanges: [pending],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+      },
+      currentUserId: 'u2',
+      simulatedNow: '2025-03-15T10:00:00.000Z',
+      isAdmin: false,
+    }
+    const ownerAttempt = reducer(state, {
+      type: 'payExchange',
+      exchangeId: 'test-exchange',
+      method: 'UPI (simulated)',
+    })
+    expect(ownerAttempt).toBe(state)
+    const borrowerPaid = reducer(
+      { ...state, currentUserId: 'u1' },
+      { type: 'payExchange', exchangeId: 'test-exchange', method: 'UPI (simulated)' },
+    )
+    expect(borrowerPaid.exchanges[0].payment).toMatchObject({
+      status: 'Paid',
+      method: 'UPI (simulated)',
+      paidAt: state.simulatedNow,
+    })
+    expect(borrowerPaid.exchanges[0].timeline.at(-1)?.note).toContain('Payment received')
+    const secondAttempt = reducer(borrowerPaid, {
+      type: 'payExchange',
+      exchangeId: 'test-exchange',
+      method: 'Campus Wallet',
+    })
+    expect(secondAttempt).toBe(borrowerPaid)
+  })
+
   it('stores an admin-set deduction when settlement is completed', () => {
     const state: AppState = {
       stateVersion: 2,
@@ -155,6 +273,8 @@ describe('exchange lifecycle', () => {
     expect(settled.exchanges[0].status).toBe('Settlement')
     expect(settled.exchanges[0].charges.damageDeduction).toBe(125)
     expect(settled.exchanges[0].charges.lateFee).toBe(0)
+    expect(settled.exchanges[0].payment.status).toBe('Refunded')
+    expect(settled.exchanges[0].payment.refund?.amount).toBe(resource.deposit - 125)
   })
 
   it('feeds an admin dispute resolution into settlement damage deduction', () => {

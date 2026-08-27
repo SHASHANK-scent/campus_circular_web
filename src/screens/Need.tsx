@@ -22,8 +22,8 @@ export const Need = () => {
   )
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const kit = useMemo(
-    () => matchIntent(intent, state.resources, state.users),
-    [intent, state.resources, state.users],
+    () => matchIntent(intent, state.resources, state.users, state.config),
+    [intent, state.resources, state.users, state.config],
   )
   const coreKit = kit.slice(0, 5)
   const optionalKit = kit.slice(5)
@@ -173,6 +173,7 @@ export const Need = () => {
                         resource: item.resource,
                         mode: intent.mode,
                         units: intent.units,
+                        platform: state.config,
                       }).borrowFee,
                     0,
                   ),
@@ -191,6 +192,7 @@ export const Need = () => {
                           resource: item.resource,
                           mode: intent.mode,
                           units: intent.units,
+                          platform: state.config,
                         }).borrowFee,
                       0,
                     ),

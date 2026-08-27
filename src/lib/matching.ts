@@ -1,4 +1,4 @@
-import type { Category, Resource, User } from '../data/types'
+import type { Category, PlatformConfig, Resource, User } from '../data/types'
 import { calculatePricing } from './pricing'
 export interface ParsedIntent {
   raw: string
@@ -184,6 +184,7 @@ export const scoreResource = (
   intent: ParsedIntent,
   _allUsers: User[],
   budgetRef = 800,
+  platform: PlatformConfig,
 ): Recommendation => {
   const overlap = intent.tags.filter(
     (tag) =>
@@ -209,7 +210,7 @@ export const scoreResource = (
   const affordability =
     1 -
     Math.min(
-      calculatePricing({ resource, mode: intent.mode, units: intent.units }).payableUpfront,
+      calculatePricing({ resource, mode: intent.mode, units: intent.units, platform }).payableUpfront,
       budgetRef,
     ) /
       budgetRef
@@ -229,6 +230,7 @@ export const matchIntent = (
   intent: ParsedIntent,
   resources: Resource[],
   users: User[],
+  platform: PlatformConfig,
 ): KitSlot[] => {
   const usedResourceIds = new Set<string>()
   const slotTerms = intent.tags
@@ -245,7 +247,7 @@ export const matchIntent = (
       })
       .map((resource) => {
         const owner = users.find((user) => user.id === resource.ownerId) ?? users[0]
-        return scoreResource(resource, owner, { ...intent, tags: [tag] }, users)
+        return scoreResource(resource, owner, { ...intent, tags: [tag] }, users, 800, platform)
       })
       .filter((item) => item.factors.suitability > 0)
       .sort((a, b) => b.score - a.score)

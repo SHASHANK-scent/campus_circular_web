@@ -99,7 +99,11 @@ export const aggregateImpact = (state: AppState): ImpactMetrics => {
   const feeRevenueOverTime = weekBuckets.map((bucket) => ({
     label: bucket.label,
     revenue: state.exchanges
-      .filter((exchange) => inBucket(exchange.createdOn, bucket))
+      .filter(
+        (exchange) =>
+          inBucket(exchange.createdOn, bucket) &&
+          (exchange.payment.status === 'Paid' || exchange.payment.status === 'Refunded'),
+      )
       .reduce((total, exchange) => total + exchange.charges.platformFee, 0),
   }))
   return {

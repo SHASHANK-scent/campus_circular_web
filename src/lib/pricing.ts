@@ -19,6 +19,14 @@ export interface PriceBreakdown {
   netToOwner: number
   hoursLate: number
 }
+export interface SettlementInput {
+  charges: { borrowFee: number; platformFee: number; deposit: number }
+  lateFeePerHour: number
+  gracePeriodMinutes: number
+  dueAt: string
+  returnedAt: string
+  damageDeduction: number
+}
 export const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value))
 export const calculateLateFee = (
@@ -81,6 +89,35 @@ export const calculatePricing = ({
     payableUpfront: borrowFee + platformFee + resource.deposit,
     refund,
     netToOwner: borrowFee + late.lateFee + damage,
+    hoursLate: late.hoursLate,
+  }
+}
+export const settleCharges = ({
+  charges,
+  lateFeePerHour,
+  gracePeriodMinutes,
+  dueAt,
+  returnedAt,
+  damageDeduction,
+}: SettlementInput): PriceBreakdown => {
+  const late = calculateLateFee(
+    dueAt,
+    returnedAt,
+    gracePeriodMinutes,
+    lateFeePerHour,
+    charges.deposit,
+  )
+  const damage = clamp(damageDeduction, 0, charges.deposit)
+  const refund = Math.max(0, charges.deposit - late.lateFee - damage)
+  return {
+    borrowFee: charges.borrowFee,
+    platformFee: charges.platformFee,
+    deposit: charges.deposit,
+    lateFee: late.lateFee,
+    damageDeduction: damage,
+    payableUpfront: charges.borrowFee + charges.platformFee + charges.deposit,
+    refund,
+    netToOwner: charges.borrowFee + late.lateFee + damage,
     hoursLate: late.hoursLate,
   }
 }

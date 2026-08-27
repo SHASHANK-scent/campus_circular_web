@@ -42,4 +42,15 @@ describe('impact aggregations', () => {
     )
     expect(metrics.feeRevenueOverTime).toHaveLength(8)
   })
+
+  it('excludes pending payments from fee revenue', () => {
+    const state = structuredClone(seedState)
+    state.exchanges = state.exchanges.map((exchange) => ({
+      ...exchange,
+      createdOn: state.simulatedNow,
+      payment: { ...exchange.payment, status: 'Pending' as const },
+    }))
+    const metrics = aggregateImpact(state)
+    expect(metrics.feeRevenueOverTime.every((point) => point.revenue === 0)).toBe(true)
+  })
 })

@@ -1,5 +1,5 @@
 import type { Exchange, ExchangeStatus, PlatformConfig, Resource } from '../data/types'
-import { calculatePricing, type PriceBreakdown } from './pricing'
+import { settleCharges, type PriceBreakdown } from './pricing'
 
 export const LIFECYCLE_STEPS: ExchangeStatus[] = [
   'Requested',
@@ -57,11 +57,10 @@ export const settlementForExchange = (
   at: string,
   damageDeduction = exchange.charges.damageDeduction,
 ): PriceBreakdown =>
-  calculatePricing({
-    resource,
-    mode: exchange.plan.mode,
-    units: exchange.plan.units,
-    platform: config,
+  settleCharges({
+    charges: exchange.charges,
+    lateFeePerHour: resource.lateFeePerHour,
+    gracePeriodMinutes: config.gracePeriodMinutes,
     dueAt: exchange.plan.dueAt,
     returnedAt: exchange.returnedAt ?? at,
     damageDeduction,

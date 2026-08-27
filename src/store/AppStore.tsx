@@ -12,16 +12,17 @@ import type {
   CommunityRequest,
   ConditionReport,
   Exchange,
+  Payment,
   PlatformConfig,
   Rating,
   Resource,
 } from '../data/types'
 import { advanceClock } from '../lib/clock'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
-import { calculatePricing } from '../lib/pricing'
+import { settleCharges } from '../lib/pricing'
 
 const KEY = 'cc.state.v1'
-export const STATE_VERSION = 5
+export const STATE_VERSION = 6
 
 export type Action =
   | { type: 'advance'; hours: number }
@@ -29,6 +30,7 @@ export type Action =
   | { type: 'switchUser'; userId: string }
   | { type: 'admin'; value: boolean }
   | { type: 'createExchange'; exchange: Exchange }
+  | { type: 'payExchange'; exchangeId: string; method: Payment['method'] }
   | { type: 'transition'; exchangeId: string; status: Exchange['status']; note?: string }
   | { type: 'condition'; exchangeId: string; report: ConditionReport; side: 'before' | 'after' }
   | {
@@ -58,14 +60,41 @@ export type Action =
     }
   | { type: 'updateConfig'; config: Partial<PlatformConfig> }
 
+const isPayment = (value: unknown): value is Payment => {
+  if (!value || typeof value !== 'object') return false
+  const payment = value as Partial<Payment>
+  const refund = payment.refund
+  return (
+    (payment.status === 'Pending' ||
+      payment.status === 'Paid' ||
+      payment.status === 'Refunded') &&
+    (payment.method === 'Campus Wallet' || payment.method === 'UPI (simulated)') &&
+    typeof payment.amount === 'number' &&
+    typeof payment.txnId === 'string' &&
+    (payment.paidAt === undefined || typeof payment.paidAt === 'string') &&
+    (refund === undefined ||
+      (typeof refund === 'object' &&
+        typeof refund.amount === 'number' &&
+        typeof refund.txnId === 'string' &&
+        typeof refund.at === 'string'))
+  )
+}
+
 const isAppState = (value: unknown): value is AppState => {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<AppState>
+  const paymentsValid =
+    Array.isArray(candidate.exchanges) &&
+    candidate.exchanges.every((exchange) => {
+      if (!exchange || typeof exchange !== 'object') return false
+      return isPayment((exchange as Partial<Exchange>).payment)
+    })
   return (
     candidate.stateVersion === STATE_VERSION &&
     Array.isArray(candidate.users) &&
     Array.isArray(candidate.resources) &&
     Array.isArray(candidate.exchanges) &&
+    paymentsValid &&
     Array.isArray(candidate.requests) &&
     typeof candidate.currentUserId === 'string' &&
     typeof candidate.simulatedNow === 'string' &&
@@ -102,11 +131,10 @@ const refreshLateFees = (state: AppState, simulatedNow: string): AppState['excha
         : exchange
     const resource = state.resources.find((item) => item.id === exchange.resourceId)
     if (!resource) return next
-    const late = calculatePricing({
-      resource,
-      mode: exchange.plan.mode,
-      units: exchange.plan.units,
-      platform: state.config,
+    const late = settleCharges({
+      charges: next.charges,
+      lateFeePerHour: resource.lateFeePerHour,
+      gracePeriodMinutes: state.config.gracePeriodMinutes,
       dueAt: exchange.plan.dueAt,
       returnedAt: simulatedNow,
       damageDeduction: next.charges.damageDeduction,
@@ -124,6 +152,41 @@ export const reducer = (state: AppState, action: Action): AppState => {
   if (action.type === 'admin') return { ...state, isAdmin: action.value }
   if (action.type === 'createExchange') {
     return { ...state, exchanges: [...state.exchanges, action.exchange] }
+  }
+  if (action.type === 'payExchange') {
+    const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
+    if (
+      !exchange ||
+      exchange.borrowerId !== state.currentUserId ||
+      exchange.status !== 'Accepted' ||
+      exchange.payment.status !== 'Pending'
+    ) {
+      return state
+    }
+    return {
+      ...state,
+      exchanges: state.exchanges.map((item) =>
+        item.id === action.exchangeId
+          ? {
+              ...item,
+              payment: {
+                ...item.payment,
+                status: 'Paid' as const,
+                method: action.method,
+                paidAt: state.simulatedNow,
+              },
+              timeline: [
+                ...item.timeline,
+                {
+                  status: item.status,
+                  at: state.simulatedNow,
+                  note: `Payment received via ${action.method}.`,
+                },
+              ],
+            }
+          : item,
+      ),
+    }
   }
   if (action.type === 'createResource') {
     return { ...state, resources: [...state.resources, action.resource] }
@@ -213,7 +276,14 @@ export const reducer = (state: AppState, action: Action): AppState => {
   if (action.type === 'transition') {
     const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
     const role = exchange ? roleFor(exchange, state.currentUserId) : null
-    if (!exchange || !role || !canTransition(exchange, action.status, role)) return state
+    if (
+      !exchange ||
+      !role ||
+      !canTransition(exchange, action.status, role) ||
+      (action.status === 'Handover' && exchange.payment.status === 'Pending')
+    ) {
+      return state
+    }
     return {
       ...state,
       exchanges: state.exchanges.map((exchange) =>
@@ -287,11 +357,11 @@ export const reducer = (state: AppState, action: Action): AppState => {
         if (exchange.id !== action.exchangeId) return exchange
         const resource = state.resources.find((item) => item.id === exchange.resourceId)
         if (!resource) return exchange
-        const pricing = calculatePricing({
-          resource,
-          mode: exchange.plan.mode,
-          units: exchange.plan.units,
-          platform: state.config,
+        if (exchange.payment.status === 'Refunded') return exchange
+        const pricing = settleCharges({
+          charges: exchange.charges,
+          lateFeePerHour: resource.lateFeePerHour,
+          gracePeriodMinutes: state.config.gracePeriodMinutes,
           dueAt: exchange.plan.dueAt,
           returnedAt: exchange.returnedAt ?? state.simulatedNow,
           damageDeduction:
@@ -306,6 +376,15 @@ export const reducer = (state: AppState, action: Action): AppState => {
             ...exchange.charges,
             lateFee: pricing.lateFee,
             damageDeduction: pricing.damageDeduction,
+          },
+          payment: {
+            ...exchange.payment,
+            status: 'Refunded',
+            refund: {
+              amount: pricing.refund,
+              txnId: `CC-RFD-${exchange.id}`,
+              at: state.simulatedNow,
+            },
           },
         }
       }),
