@@ -58,6 +58,7 @@ export const Agreement = () => {
         amount: pricing.payableUpfront,
         txnId: `CC-PAY-${exchangeId.replace(/^ex-/, '')}`,
       },
+      fines: [],
       purpose,
     }
     dispatch({ type: 'createExchange', exchange })

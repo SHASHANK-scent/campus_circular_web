@@ -55,6 +55,24 @@ export const SettlementBreakdown = ({
             <span>Refund</span>
             <b>{money(pricing.refund)}</b>
           </div>
+          {exchange.fines.length > 0 && (
+            <div className="mt-3 border-t border-emerald-200 pt-3">
+              <p className="font-black">Fine itemisation</p>
+              {exchange.fines.map((fine) => (
+                <div className="mt-1 flex justify-between" key={fine.id}>
+                  <span>{fine.reason} · {fine.status}</span>
+                  <b>{money(fine.amount)}</b>
+                </div>
+              ))}
+              <div className="mt-2 flex justify-between font-bold">
+                <span>Total fines (capped)</span><b>{money(pricing.finesTotal)}</b>
+              </div>
+              <div className="flex justify-between"><span>From deposit</span><b>{money(Math.min(pricing.finesTotal, pricing.deposit))}</b></div>
+              {pricing.outstanding > 0 && (
+                <div className="flex justify-between font-bold text-rose-700"><span>Outstanding</span><b>{money(pricing.outstanding)}</b></div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       <p className="mt-4 text-xs text-slate-500">

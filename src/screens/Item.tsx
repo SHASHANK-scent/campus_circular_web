@@ -16,6 +16,7 @@ import { isPubliclyListed, ownerVerificationLevel } from '../lib/verification'
 import { formatDate } from '../lib/clock'
 import { calculatePricing } from '../lib/pricing'
 import { useApp } from '../store/AppStore'
+import { trustScore } from '../lib/trust'
 export const Item = () => {
   const { id } = useParams()
   const { state } = useApp()
@@ -142,7 +143,7 @@ export const Item = () => {
                   )}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {owner.department} · {owner.year} · Trust {owner.trustScore}
+                  {owner.department} · {owner.year} · Trust {trustScore(owner, state.exchanges)}
                 </p>
                 <div className="mt-2">
                   <OwnerVerificationBadge user={owner} />

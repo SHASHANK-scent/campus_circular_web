@@ -1,4 +1,5 @@
-import type { Category, PlatformConfig, Resource, User } from '../data/types'
+import type { Category, Exchange, PlatformConfig, Resource, User } from '../data/types'
+import { trustScore } from './trust'
 import { calculatePricing } from './pricing'
 import { isPubliclyListed } from './verification'
 export interface ParsedIntent {
@@ -186,6 +187,7 @@ export const scoreResource = (
   _allUsers: User[],
   budgetRef = 800,
   platform: PlatformConfig,
+  exchanges: Exchange[] = [],
 ): Recommendation => {
   const overlap = intent.tags.filter(
     (tag) =>
@@ -206,7 +208,7 @@ export const scoreResource = (
           ? 0
           : 1
   const distance = 1 - Math.min(resource.distanceMeters, 2000) / 2000
-  const ownerTrust = (owner.trustScore / 100 + owner.rating / 5) / 2
+  const ownerTrust = (trustScore(owner, exchanges) / 100 + owner.rating / 5) / 2
   const condition = conditionScore(resource.condition)
   const affordability =
     1 -
@@ -232,6 +234,7 @@ export const matchIntent = (
   resources: Resource[],
   users: User[],
   platform: PlatformConfig,
+  exchanges: Exchange[] = [],
 ): KitSlot[] => {
   const usedResourceIds = new Set<string>()
   const slotTerms = intent.tags
@@ -248,7 +251,7 @@ export const matchIntent = (
       })
       .map((resource) => {
         const owner = users.find((user) => user.id === resource.ownerId) ?? users[0]
-        return scoreResource(resource, owner, { ...intent, tags: [tag] }, users, 800, platform)
+        return scoreResource(resource, owner, { ...intent, tags: [tag] }, users, 800, platform, exchanges)
       })
       .filter((item) => item.factors.suitability > 0)
       .sort((a, b) => b.score - a.score)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { ChevronDown, Clock3, Leaf, RotateCcw, Sparkles } from 'lucide-react'
 import { useApp } from '../store/AppStore'
+import { trustScore } from '../lib/trust'
 export const money = (value: number) => `₹${Math.round(value).toLocaleString('en-IN')}`
 export const Avatar = ({ initials, className = '' }: { initials: string; className?: string }) => (
   <span
@@ -67,7 +68,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
               <span className="hidden text-left sm:block">
                 <span className="block text-[11px] font-bold">{current.name.split(' ')[0]}</span>
                 <span className="block text-[10px] text-emerald-700">
-                  Trust {current.trustScore}
+                  Trust {trustScore(current, state.exchanges)}
                 </span>
               </span>
             </button>
@@ -102,15 +103,34 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 </label>
                 <select
                   value={current.id}
-                  onChange={(event) => dispatch({ type: 'switchUser', userId: event.target.value })}
+                  onChange={(event) => {
+                    const userId = event.target.value
+                    dispatch({ type: 'login', userId })
+                    navigate(
+                      state.users.find((user) => user.id === userId)?.verification.level ===
+                        'Fully Verified'
+                        ? '/'
+                        : '/verify-me',
+                    )
+                  }}
                   className="mt-1 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"
                 >
                   {state.users.slice(0, 5).map((user) => (
                     <option value={user.id} key={user.id}>
-                      {user.name} · {user.trustScore}
+                      {user.name} · {trustScore(user, state.exchanges)}
                     </option>
                   ))}
                 </select>
+                <button
+                  onClick={() => {
+                    dispatch({ type: 'logout' })
+                    navigate('/login')
+                    setOpen(false)
+                  }}
+                  className="mt-3 w-full rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold text-slate-600"
+                >
+                  Log out
+                </button>
                 <button
                   onClick={() => dispatch({ type: 'reset' })}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-slate-200 px-2 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"

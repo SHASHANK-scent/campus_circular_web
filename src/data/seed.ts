@@ -7,6 +7,7 @@ import type {
   Resource,
   ResourceVerification,
   User,
+  Fine,
 } from './types'
 import { settleCharges } from '../lib/pricing'
 import { ownerVerificationLevel, STANDARD_CHECKS } from '../lib/verification'
@@ -373,7 +374,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 7,
+  stateVersion: 8,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],
@@ -414,10 +415,12 @@ export const seedState: AppState = {
     platformFeeMin: 10,
     platformFeeMax: 150,
     gracePeriodMinutes: 30,
+    fineCapMultiplier: 2,
   },
   currentUserId: 'u1',
   simulatedNow: now.toISOString(),
   isAdmin: false,
+  session: { loggedIn: true },
 }
 
 export const seedExchanges = (): AppState['exchanges'] => {
@@ -470,6 +473,34 @@ export const seedExchanges = (): AppState['exchanges'] => {
       lateFee: status === 'Return Due' ? resource.lateFeePerHour * 2 : 0,
       damageDeduction: status === 'Inspection' ? 250 : 0,
     }
+    const fines: Fine[] = [
+      ...(index === 5
+        ? [
+            {
+              id: `fine-late-ex${index + 1}`,
+              reason: 'Late return' as const,
+              amount: resource.lateFeePerHour * 2,
+              issuedBy: resource.ownerId,
+              issuedAt: returnedOn,
+              status: 'Settled' as const,
+              note: 'Returned two hours after the grace period.',
+            },
+          ]
+        : []),
+      ...(index === 3
+        ? [
+            {
+              id: `fine-damage-ex${index + 1}`,
+              reason: 'Damage' as const,
+              amount: 250,
+              issuedBy: resource.ownerId,
+              issuedAt: returnedOn,
+              status: 'Pending' as const,
+              note: 'Scratch documented during return inspection.',
+            },
+          ]
+        : []),
+    ]
     const settlement = settleCharges({
       charges,
       lateFeePerHour: resource.lateFeePerHour,
@@ -477,6 +508,8 @@ export const seedExchanges = (): AppState['exchanges'] => {
       dueAt,
       returnedAt: returnedOn,
       damageDeduction: charges.damageDeduction,
+      fines: fines.reduce((sum, fine) => sum + fine.amount, 0),
+      fineCapMultiplier: 2,
     })
     const paymentStatus: Payment['status'] =
       status === 'Settlement' || status === 'Rated'
@@ -538,8 +571,15 @@ export const seedExchanges = (): AppState['exchanges'] => {
           : undefined,
       ratingByOwner:
         status === 'Rated'
-          ? { stars: 5, comment: 'Super smooth exchange!', at: iso(-1) }
+          ? {
+              stars: 1,
+              comment: 'The equipment came back damaged and needed repair.',
+              at: iso(-1),
+              conditionOnReturn: 'Fair',
+              tags: ['Returned damaged', 'Poor care'],
+            }
           : undefined,
+      fines,
     }
   })
 }

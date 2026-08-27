@@ -22,8 +22,8 @@ export const Need = () => {
   )
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const kit = useMemo(
-    () => matchIntent(intent, state.resources, state.users, state.config),
-    [intent, state.resources, state.users, state.config],
+    () => matchIntent(intent, state.resources, state.users, state.config, state.exchanges),
+    [intent, state.resources, state.users, state.config, state.exchanges],
   )
   const coreKit = kit.slice(0, 5)
   const optionalKit = kit.slice(5)

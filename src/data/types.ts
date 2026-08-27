@@ -128,6 +128,26 @@ export interface Rating {
   stars: number
   comment: string
   at: string
+  conditionOnReturn?: Condition
+  tags?: ReviewTag[]
+}
+export type ReviewTag =
+  | 'Returned on time'
+  | 'Returned late'
+  | 'Came back in good condition'
+  | 'Returned damaged'
+  | 'Missing accessories'
+  | 'Great communication'
+  | 'Poor care'
+export type FineReason = 'Late return' | 'Damage' | 'Missing accessories' | 'Lost item'
+export interface Fine {
+  id: string
+  reason: FineReason
+  amount: number
+  note?: string
+  issuedBy: UserId
+  issuedAt: string
+  status: 'Pending' | 'Settled' | 'Waived'
 }
 export type PaymentStatus = 'Pending' | 'Paid' | 'Refunded'
 export interface Payment {
@@ -137,6 +157,7 @@ export interface Payment {
   txnId: string
   paidAt?: string
   refund?: { amount: number; txnId: string; at: string }
+  outstanding?: { amount: number; status: 'Due' | 'Paid'; txnId?: string; paidAt?: string }
 }
 export interface Exchange {
   id: string
@@ -155,6 +176,7 @@ export interface Exchange {
     damageDeduction: number
   }
   payment: Payment
+  fines: Fine[]
   returnedAt?: string
   before?: ConditionReport
   after?: ConditionReport
@@ -178,6 +200,7 @@ export interface PlatformConfig {
   platformFeeMin: number
   platformFeeMax: number
   gracePeriodMinutes: number
+  fineCapMultiplier: number
 }
 export interface AppState {
   stateVersion: number
@@ -189,4 +212,5 @@ export interface AppState {
   currentUserId: string
   simulatedNow: string
   isAdmin: boolean
+  session: { loggedIn: boolean }
 }

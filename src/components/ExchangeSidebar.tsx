@@ -127,6 +127,15 @@ export const ExchangeSidebar = ({
           </>
         ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
           role === 'borrower' &&
+          exchange.payment.outstanding?.status === 'Due' ? (
+          <button
+            onClick={() => dispatch({ type: 'payOutstanding', exchangeId: exchange.id })}
+            className="mt-4 w-full rounded-xl bg-rose-600 py-3 text-xs font-bold text-white"
+          >
+            Pay outstanding fine {money(exchange.payment.outstanding.amount)}
+          </button>
+        ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
+          role === 'borrower' &&
           !exchange.ratingByBorrower ? (
           <p className="mt-3 text-xs font-bold text-emerald-700">
             Your rating is the next step. Share how this exchange went.

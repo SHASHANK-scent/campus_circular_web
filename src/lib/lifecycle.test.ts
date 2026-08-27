@@ -33,6 +33,7 @@ const baseExchange = (status: Exchange['status'] = 'Borrowed'): Exchange => ({
     txnId: 'CC-PAY-test',
     paidAt: '2025-03-15T10:00:00.000Z',
   },
+  fines: [],
 })
 
 describe('exchange lifecycle', () => {
@@ -61,6 +62,7 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       '2025-03-16T10:00:00.000Z',
     )
@@ -84,6 +86,7 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 50,
         platformFeeMax: 500,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       '2025-03-16T10:00:00.000Z',
     )
@@ -102,6 +105,7 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       '2025-03-16T12:31:00.000Z',
     )
@@ -123,6 +127,7 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       '2025-03-16T10:00:00.000Z',
     )
@@ -143,10 +148,12 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       currentUserId: 'u1',
       simulatedNow: '2025-03-15T10:00:00.000Z',
       isAdmin: false,
+      session: { loggedIn: true },
     }
     const advanced = reducer(state, { type: 'advance', hours: 27 })
     expect(advanced.exchanges[0].status).toBe('Return Due')
@@ -170,10 +177,12 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       currentUserId: 'u2',
       simulatedNow: '2025-03-15T10:00:00.000Z',
       isAdmin: false,
+      session: { loggedIn: true },
     }
     const blocked = reducer(state, {
       type: 'transition',
@@ -214,10 +223,12 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       currentUserId: 'u2',
       simulatedNow: '2025-03-15T10:00:00.000Z',
       isAdmin: false,
+      session: { loggedIn: true },
     }
     const ownerAttempt = reducer(state, {
       type: 'payExchange',
@@ -260,10 +271,12 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       currentUserId: 'u2',
       simulatedNow: '2025-03-16T10:00:00.000Z',
       isAdmin: true,
+      session: { loggedIn: true },
     }
     const settled = reducer(state, {
       type: 'settle',
@@ -303,10 +316,12 @@ describe('exchange lifecycle', () => {
         platformFeeMin: 10,
         platformFeeMax: 150,
         gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
       },
       currentUserId: 'u1',
       simulatedNow: '2025-03-16T10:00:00.000Z',
       isAdmin: true,
+      session: { loggedIn: true },
     }
     const resolved = reducer(state, {
       type: 'resolveDispute',

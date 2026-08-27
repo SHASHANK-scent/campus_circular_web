@@ -49,6 +49,7 @@ describe('pricing rules', () => {
           platformFeeMin: 10,
           platformFeeMax: 150,
           gracePeriodMinutes: 30,
+          fineCapMultiplier: 2,
         },
       }).platformFee,
     ).toBe(10)
@@ -62,6 +63,7 @@ describe('pricing rules', () => {
           platformFeeMin: 10,
           platformFeeMax: 150,
           gracePeriodMinutes: 30,
+          fineCapMultiplier: 2,
         },
       }).platformFee,
     ).toBe(150)

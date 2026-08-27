@@ -1,6 +1,6 @@
 import { useState, type Dispatch } from 'react'
 import { AlertTriangle, CreditCard, FileWarning, Star } from 'lucide-react'
-import type { Exchange, Payment, PlatformConfig, Rating, Resource } from '../data/types'
+import type { Exchange, FineReason, Payment, PlatformConfig, Rating, Resource, ReviewTag } from '../data/types'
 import { formatDate, formatRelative } from '../lib/clock'
 import { canTransition, roleFor, settlementForExchange } from '../lib/lifecycle'
 import { imageToDataUrl } from '../lib/photos'
@@ -69,9 +69,20 @@ const ReportDamage = ({
   )
 }
 
-const RatingForm = ({ onSubmit, now }: { onSubmit: (rating: Rating) => void; now: string }) => {
+const RatingForm = ({ onSubmit, now, owner, exchange }: { onSubmit: (rating: Rating) => void; now: string; owner: boolean; exchange: Exchange }) => {
   const [stars, setStars] = useState(5)
   const [comment, setComment] = useState('Reliable and easy to coordinate with.')
+  const initialTags: ReviewTag[] = owner
+    ? [
+        ...(exchange.returnedAt && new Date(exchange.returnedAt).getTime() > new Date(exchange.plan.dueAt).getTime() ? ['Returned late' as const] : ['Returned on time' as const]),
+        ...(exchange.after && exchange.before && ['Like New', 'Good', 'Fair', 'Worn'].indexOf(exchange.after.overall) > ['Like New', 'Good', 'Fair', 'Worn'].indexOf(exchange.before.overall) ? ['Returned damaged' as const] : ['Came back in good condition' as const]),
+      ]
+    : ['Great communication' as const]
+  const [tags, setTags] = useState<ReviewTag[]>(initialTags)
+  const [condition, setCondition] = useState<Rating['conditionOnReturn']>(exchange.after?.overall)
+  const availableTags: ReviewTag[] = owner
+    ? ['Returned on time', 'Returned late', 'Came back in good condition', 'Returned damaged', 'Missing accessories', 'Poor care']
+    : ['Great communication', 'Poor care']
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
       <p className="text-xs font-bold text-slate-600">Leave a rating</p>
@@ -91,14 +102,40 @@ const RatingForm = ({ onSubmit, now }: { onSubmit: (rating: Rating) => void; now
         onChange={(event) => setComment(event.target.value)}
         className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs"
       />
+      <div className="mt-3 flex flex-wrap gap-2">
+        {availableTags.map((tag) => (
+          <button key={tag} onClick={() => setTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag])} className={`rounded-full px-2 py-1 text-[10px] font-bold ${tags.includes(tag) ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-slate-500'}`}>{tag}</button>
+        ))}
+      </div>
+      {owner && (
+        <select value={condition ?? ''} onChange={(event) => setCondition(event.target.value as Rating['conditionOnReturn'])} className="mt-3 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs">
+          <option value="">Returned condition</option>
+          {(['Like New', 'Good', 'Fair', 'Worn'] as const).map((item) => <option key={item}>{item}</option>)}
+        </select>
+      )}
       <button
-        onClick={() => onSubmit({ stars, comment, at: now })}
+        onClick={() => onSubmit({ stars, comment, at: now, tags, ...(condition ? { conditionOnReturn: condition } : {}) })}
         className="mt-3 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"
       >
         Submit rating
       </button>
     </div>
   )
+}
+
+const FineForm = ({ exchange, dispatch }: { exchange: Exchange; dispatch: Dispatch<Action> }) => {
+  const [reason, setReason] = useState<FineReason>('Damage')
+  const [amount, setAmount] = useState(100)
+  const [note, setNote] = useState('')
+  return <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+    <p className="text-xs font-black text-amber-800">Issue a fine</p>
+    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <select value={reason} onChange={(event) => setReason(event.target.value as FineReason)} className="field">{['Damage', 'Missing accessories', 'Lost item'].map((item) => <option key={item}>{item}</option>)}</select>
+      <input type="number" min="1" value={amount} onChange={(event) => setAmount(Number(event.target.value))} className="field" />
+      <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Note" className="field" />
+    </div>
+    <button onClick={() => dispatch({ type: 'issueFine', exchangeId: exchange.id, reason, amount, note: note || undefined })} className="mt-3 rounded-lg bg-amber-600 px-3 py-2 text-xs font-bold text-white">Issue fine</button>
+  </div>
 }
 
 const PaymentPanel = ({
@@ -187,6 +224,13 @@ const PaymentReceipt = ({ payment }: { payment: Payment }) => (
           <span>{payment.refund.txnId}</span>
           <span>{formatDate(payment.refund.at)}</span>
         </div>
+      </div>
+    )}
+    {payment.outstanding && (
+      <div className="mt-4 rounded-xl bg-rose-50 p-4 text-xs">
+        <p className="font-black text-rose-800">Outstanding fine payment</p>
+        <p className="mt-2">₹{Math.round(payment.outstanding.amount).toLocaleString('en-IN')} · {payment.outstanding.status}</p>
+        {payment.outstanding.txnId && <p className="mt-1 text-slate-500">{payment.outstanding.txnId}</p>}
       </div>
     )}
   </div>
@@ -385,6 +429,7 @@ export const ExchangeMainPanel = ({
               }}
             />
           )}
+          {role === 'owner' && <FineForm exchange={exchange} dispatch={dispatch} />}
           {exchange.dispute && (
             <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 p-4 text-xs">
               <p className="font-black text-rose-800">Damage dispute · {exchange.dispute.status}</p>
@@ -418,6 +463,8 @@ export const ExchangeMainPanel = ({
             {role === 'owner' && !exchange.ratingByOwner ? (
               <RatingForm
                 now={now}
+                owner
+                exchange={exchange}
                 onSubmit={(rating) =>
                   dispatch({ type: 'rating', exchangeId: exchange.id, side: 'owner', rating })
                 }
@@ -430,6 +477,8 @@ export const ExchangeMainPanel = ({
             {role === 'borrower' && !exchange.ratingByBorrower ? (
               <RatingForm
                 now={now}
+                owner={false}
+                exchange={exchange}
                 onSubmit={(rating) =>
                   dispatch({ type: 'rating', exchangeId: exchange.id, side: 'borrower', rating })
                 }

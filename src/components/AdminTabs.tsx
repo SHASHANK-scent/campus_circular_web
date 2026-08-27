@@ -16,10 +16,13 @@ import { formatDate } from '../lib/clock'
 import { Badge, money } from './Layout'
 import { useApp } from '../store/AppStore'
 import { VerificationBadge } from './VerificationBadge'
+import { trustScore } from '../lib/trust'
+import { ledgerRows, ledgerSummary } from '../lib/ledger'
 
 type Tab =
   | 'Overview'
   | 'Verification'
+  | 'Handover & Returns'
   | 'Users'
   | 'Resources'
   | 'Exchanges'
@@ -35,6 +38,7 @@ export const AdminTabs = () => {
   const [feeMin, setFeeMin] = useState(state.config.platformFeeMin)
   const [feeMax, setFeeMax] = useState(state.config.platformFeeMax)
   const [grace, setGrace] = useState(state.config.gracePeriodMinutes)
+  const [fineCapMultiplier, setFineCapMultiplier] = useState(state.config.fineCapMultiplier)
   const revenue = state.exchanges
     .filter(
       (exchange) => exchange.payment.status === 'Paid' || exchange.payment.status === 'Refunded',
@@ -59,6 +63,7 @@ export const AdminTabs = () => {
           [
             'Overview',
             'Verification',
+            'Handover & Returns',
             'Users',
             'Resources',
             'Exchanges',
@@ -89,6 +94,7 @@ export const AdminTabs = () => {
         />
       )}
       {tab === 'Verification' && <VerificationPanel />}
+      {tab === 'Handover & Returns' && <LedgerPanel />}
       {tab === 'Users' && <UsersPanel />}
       {tab === 'Resources' && <ResourcesPanel />}
       {tab === 'Exchanges' && (
@@ -145,6 +151,7 @@ export const AdminTabs = () => {
               ['Minimum fee', feeMin, setFeeMin],
               ['Maximum fee', feeMax, setFeeMax],
               ['Grace period (minutes)', grace, setGrace],
+              ['Fine cap multiplier', fineCapMultiplier, setFineCapMultiplier],
             ].map(([label, value, setter]) => (
               <label className="text-xs font-bold text-slate-600" key={label as string}>
                 {label as string}
@@ -169,6 +176,7 @@ export const AdminTabs = () => {
                   platformFeeMin: feeMin,
                   platformFeeMax: feeMax,
                   gracePeriodMinutes: grace,
+                  fineCapMultiplier,
                 },
               })
             }
@@ -204,7 +212,7 @@ export const AdminTabs = () => {
                       {user.department}
                     </span>
                   </td>
-                  <td className="p-4">{user.trustScore}</td>
+                  <td className="p-4">{trustScore(user, state.exchanges)}</td>
                   <td className="p-4">{user.disputes}</td>
                   <td className="p-4">
                     {user.suspended ? (
@@ -479,6 +487,46 @@ export const AdminTabs = () => {
           .map((exchange) => (
             <DisputeRow exchange={exchange} key={exchange.id} />
           ))}
+      </div>
+    )
+  }
+
+  function LedgerPanel() {
+    const rows = ledgerRows(state)
+    const summary = ledgerSummary(state)
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            ['Currently out', summary.currentlyOut],
+            ['Overdue now', summary.overdueNow],
+            ['Returned on time', summary.returnedOnTime],
+            ['Returned late', summary.returnedLate],
+            ['Fines issued', money(summary.finesIssued)],
+            ['Fines collected', money(summary.finesCollected)],
+          ].map(([label, value]) => (
+            <div className="rounded-2xl border border-slate-200 bg-white p-4" key={label as string}>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{label as string}</p>
+              <p className="mt-2 text-2xl font-black">{value as string | number}</p>
+            </div>
+          ))}
+        </div>
+        {rows.map((row) => (
+          <div key={row.exchange.id} className={`rounded-2xl border p-5 ${row.overdue ? 'border-rose-200 bg-rose-50' : 'border-slate-200 bg-white'}`}>
+            <div className="flex flex-wrap justify-between gap-2">
+              <div><p className="font-black">{row.title}</p><p className="mt-1 text-xs text-slate-500">{row.owner} → {row.borrower}</p></div>
+              <Badge tone={row.overdue || row.lateByHours > 0 ? 'rose' : 'green'}>{row.stillOut ? (row.overdue ? `Still out · ${row.lateByHours}h overdue` : 'Still out') : row.lateByHours ? `${row.lateByHours}h late` : 'Returned on time'}</Badge>
+            </div>
+            <div className="mt-4 grid gap-2 text-xs text-slate-600 sm:grid-cols-2 lg:grid-cols-4">
+              <span>Handed over {formatDate(row.handedOverAt)}</span><span>Due {formatDate(row.dueAt)}</span><span>Returned {row.returnedAt ? formatDate(row.returnedAt) : 'still out'}</span><span>Condition {row.conditionBefore ?? '—'} → {row.conditionAfter ?? '—'}</span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {row.fines.map((fine) => <span className="inline-flex items-center gap-1" key={fine.id}><Badge tone={fine.status === 'Waived' ? 'slate' : 'amber'}>{fine.reason} {money(fine.amount)} · {fine.status}</Badge>{fine.status !== 'Waived' && <button onClick={() => dispatch({ type: 'waiveFine', exchangeId: row.exchange.id, fineId: fine.id })} className="rounded bg-slate-100 px-1.5 py-1 text-[10px] font-bold text-slate-600">Waive</button>}</span>)}
+              <Badge tone="green">Deposit refunded {money(row.refunded)}</Badge>
+              {row.outstanding > 0 && <Badge tone="rose">Outstanding {money(row.outstanding)}</Badge>}
+            </div>
+          </div>
+        ))}
       </div>
     )
   }

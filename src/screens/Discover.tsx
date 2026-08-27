@@ -6,6 +6,7 @@ import { ResourceImage } from '../components/ResourceImage'
 import { VerificationBadge } from '../components/VerificationBadge'
 import { isPubliclyListed } from '../lib/verification'
 import { useApp } from '../store/AppStore'
+import { trustScore } from '../lib/trust'
 const cats = [
   'Camera & Video',
   'Audio',
@@ -197,7 +198,10 @@ export const Discover = () => {
                       ★ {resource.rating.toFixed(1)}
                     </span>
                     <span>
-                      Trust {state.users.find((user) => user.id === resource.ownerId)?.trustScore}
+                      Trust {(() => {
+                        const owner = state.users.find((user) => user.id === resource.ownerId)
+                        return owner ? trustScore(owner, state.exchanges) : 0
+                      })()}
                     </span>
                     <span className="ml-auto">{resource.timesBorrowed} borrows</span>
                   </div>

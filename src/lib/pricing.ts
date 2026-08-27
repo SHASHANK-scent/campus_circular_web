@@ -18,6 +18,8 @@ export interface PriceBreakdown {
   refund: number
   netToOwner: number
   hoursLate: number
+  finesTotal: number
+  outstanding: number
 }
 export interface SettlementInput {
   charges: { borrowFee: number; platformFee: number; deposit: number }
@@ -26,6 +28,9 @@ export interface SettlementInput {
   dueAt: string
   returnedAt: string
   damageDeduction: number
+  fines: number
+  fineCapMultiplier: number
+  fineSubtotals?: { lateFee: number; damageDeduction: number }
 }
 export const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value))
@@ -54,6 +59,7 @@ export const calculatePricing = ({
     platformFeeMin: 10,
     platformFeeMax: 150,
     gracePeriodMinutes: 30,
+    fineCapMultiplier: 2,
   },
   dueAt,
   returnedAt,
@@ -90,6 +96,8 @@ export const calculatePricing = ({
     refund,
     netToOwner: borrowFee + late.lateFee + damage,
     hoursLate: late.hoursLate,
+    finesTotal: late.lateFee + damage,
+    outstanding: 0,
   }
 }
 export const settleCharges = ({
@@ -99,6 +107,9 @@ export const settleCharges = ({
   dueAt,
   returnedAt,
   damageDeduction,
+  fines,
+  fineCapMultiplier,
+  fineSubtotals,
 }: SettlementInput): PriceBreakdown => {
   const late = calculateLateFee(
     dueAt,
@@ -108,16 +119,21 @@ export const settleCharges = ({
     charges.deposit,
   )
   const damage = clamp(damageDeduction, 0, charges.deposit)
-  const refund = Math.max(0, charges.deposit - late.lateFee - damage)
+  const effectiveFines = fines > 0 ? fines : late.lateFee + damage
+  const finesTotal = Math.min(Math.max(0, effectiveFines), charges.deposit * fineCapMultiplier)
+  const fromDeposit = Math.min(finesTotal, charges.deposit)
+  const refund = Math.max(0, charges.deposit - fromDeposit)
   return {
     borrowFee: charges.borrowFee,
     platformFee: charges.platformFee,
     deposit: charges.deposit,
-    lateFee: late.lateFee,
-    damageDeduction: damage,
+    lateFee: fineSubtotals?.lateFee ?? late.lateFee,
+    damageDeduction: fineSubtotals?.damageDeduction ?? damage,
     payableUpfront: charges.borrowFee + charges.platformFee + charges.deposit,
     refund,
-    netToOwner: charges.borrowFee + late.lateFee + damage,
+    netToOwner: charges.borrowFee + finesTotal,
     hoursLate: late.hoursLate,
+    finesTotal,
+    outstanding: Math.max(0, finesTotal - charges.deposit),
   }
 }

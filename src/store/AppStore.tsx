@@ -14,6 +14,8 @@ import type {
   ConditionReport,
   EquipmentCheck,
   Exchange,
+  Fine,
+  FineReason,
   OwnerVerification,
   Payment,
   PlatformConfig,
@@ -25,10 +27,15 @@ import type {
 import { advanceClock } from '../lib/clock'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { settleCharges } from '../lib/pricing'
-import { allChecksPassed, isPubliclyListed, resolveVerifierId } from '../lib/verification'
+import {
+  allChecksPassed,
+  isPubliclyListed,
+  ownerVerificationLevel,
+  resolveVerifierId,
+} from '../lib/verification'
 
 const KEY = 'cc.state.v1'
-export const STATE_VERSION = 7
+export const STATE_VERSION = 8
 
 export type Action =
   | { type: 'advance'; hours: number }
@@ -37,6 +44,7 @@ export type Action =
   | { type: 'admin'; value: boolean }
   | { type: 'createExchange'; exchange: Exchange }
   | { type: 'payExchange'; exchangeId: string; method: Payment['method'] }
+  | { type: 'payOutstanding'; exchangeId: string }
   | { type: 'transition'; exchangeId: string; status: Exchange['status']; note?: string }
   | { type: 'condition'; exchangeId: string; report: ConditionReport; side: 'before' | 'after' }
   | {
@@ -47,7 +55,18 @@ export type Action =
       evidence: string[]
     }
   | { type: 'settle'; exchangeId: string; damageDeduction?: number }
+  | {
+      type: 'issueFine'
+      exchangeId: string
+      reason: FineReason
+      amount: number
+      note?: string
+    }
+  | { type: 'waiveFine'; exchangeId: string; fineId: string }
   | { type: 'rating'; exchangeId: string; rating: Rating; side: 'owner' | 'borrower' }
+  | { type: 'login'; userId: string }
+  | { type: 'logout' }
+  | { type: 'completeVerificationStep'; userId: string; step: 'identity' | 'campus' | 'contact' }
   | { type: 'createResource'; resource: Resource }
   | { type: 'createRequest'; request: CommunityRequest }
   | { type: 'respondRequest'; requestId: string; resourceId: string; note: string }
@@ -79,6 +98,7 @@ const isPayment = (value: unknown): value is Payment => {
   if (!value || typeof value !== 'object') return false
   const payment = value as Partial<Payment>
   const refund = payment.refund
+  const outstanding = payment.outstanding
   return (
     (payment.status === 'Pending' ||
       payment.status === 'Paid' ||
@@ -92,6 +112,13 @@ const isPayment = (value: unknown): value is Payment => {
         typeof refund.amount === 'number' &&
         typeof refund.txnId === 'string' &&
         typeof refund.at === 'string'))
+    &&
+    (outstanding === undefined ||
+      (typeof outstanding === 'object' &&
+        typeof outstanding.amount === 'number' &&
+        (outstanding.status === 'Due' || outstanding.status === 'Paid') &&
+        (outstanding.txnId === undefined || typeof outstanding.txnId === 'string') &&
+        (outstanding.paidAt === undefined || typeof outstanding.paidAt === 'string')))
   )
 }
 
@@ -139,7 +166,10 @@ const isAppState = (value: unknown): value is AppState => {
     Array.isArray(candidate.exchanges) &&
     candidate.exchanges.every((exchange) => {
       if (!exchange || typeof exchange !== 'object') return false
-      return isPayment((exchange as Partial<Exchange>).payment)
+      return (
+        isPayment((exchange as Partial<Exchange>).payment) &&
+        Array.isArray((exchange as Partial<Exchange>).fines)
+      )
     })
   const verificationsValid =
     Array.isArray(candidate.resources) &&
@@ -164,6 +194,9 @@ const isAppState = (value: unknown): value is AppState => {
     typeof candidate.config.platformFeeMin === 'number' &&
     typeof candidate.config.platformFeeMax === 'number' &&
     typeof candidate.config.gracePeriodMinutes === 'number'
+    && typeof candidate.config.fineCapMultiplier === 'number'
+    && Boolean(candidate.session)
+    && typeof candidate.session.loggedIn === 'boolean'
   )
 }
 
@@ -198,8 +231,33 @@ const refreshLateFees = (state: AppState, simulatedNow: string): AppState['excha
       dueAt: exchange.plan.dueAt,
       returnedAt: simulatedNow,
       damageDeduction: next.charges.damageDeduction,
+      fines: next.fines
+        .filter((fine) => fine.reason !== 'Late return' && fine.status !== 'Waived')
+        .reduce((sum, fine) => sum + fine.amount, 0),
+      fineCapMultiplier: state.config.fineCapMultiplier ?? 2,
     })
-    return { ...next, charges: { ...next.charges, lateFee: late.lateFee } }
+    const hoursLate = late.hoursLate
+    const lateAmount = hoursLate * resource.lateFeePerHour
+    const existing = next.fines.find((fine) => fine.reason === 'Late return')
+    const fines = hoursLate > 0
+      ? existing
+        ? next.fines.map((fine) =>
+            fine.id === existing.id ? { ...fine, amount: lateAmount, status: 'Pending' as const } : fine,
+          )
+        : [
+            ...next.fines,
+            {
+              id: `fine-late-${next.id}`,
+              reason: 'Late return' as const,
+              amount: lateAmount,
+              note: `${hoursLate} hour(s) late`,
+              issuedBy: next.ownerId,
+              issuedAt: simulatedNow,
+              status: 'Pending' as const,
+            },
+          ]
+      : next.fines
+    return { ...next, fines, charges: { ...next.charges, lateFee: lateAmount } }
   })
 
 export const reducer = (state: AppState, action: Action): AppState => {
@@ -209,16 +267,47 @@ export const reducer = (state: AppState, action: Action): AppState => {
     return { ...state, simulatedNow, exchanges: refreshLateFees(state, simulatedNow) }
   }
   if (action.type === 'switchUser') return { ...state, currentUserId: action.userId }
+  if (action.type === 'login') return { ...state, currentUserId: action.userId, isAdmin: false, session: { loggedIn: true } }
+  if (action.type === 'logout') return { ...state, session: { loggedIn: false }, isAdmin: false }
+  if (action.type === 'completeVerificationStep') {
+    return {
+      ...state,
+      users: state.users.map((user) => {
+        if (user.id !== action.userId) return user
+        const verification = {
+          ...user.verification,
+          ...(action.step === 'identity' ? { identityVerified: true } : {}),
+          ...(action.step === 'campus' ? { campusVerified: true } : {}),
+          ...(action.step === 'contact' ? { contactVerified: true } : {}),
+        }
+        const level = ownerVerificationLevel(verification)
+        return {
+          ...user,
+          verified: level === 'Fully Verified',
+          verification: {
+            ...verification,
+            level,
+            ...(level === 'Fully Verified' && !verification.verifiedAt
+              ? { verifiedAt: state.simulatedNow }
+              : {}),
+          },
+        }
+      }),
+    }
+  }
   if (action.type === 'admin') return { ...state, isAdmin: action.value }
   if (action.type === 'createExchange') {
+    const actor = state.users.find((user) => user.id === state.currentUserId)
     const resource = state.resources.find((item) => item.id === action.exchange.resourceId)
-    if (!resource || !isPubliclyListed(resource)) return state
+    if (!resource || !isPubliclyListed(resource) || (actor && ownerVerificationLevel(actor.verification) !== 'Fully Verified')) return state
     return { ...state, exchanges: [...state.exchanges, action.exchange] }
   }
   if (action.type === 'payExchange') {
+    const actor = state.users.find((user) => user.id === state.currentUserId)
     const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
     if (
       !exchange ||
+      (actor && ownerVerificationLevel(actor.verification) !== 'Fully Verified') ||
       exchange.borrowerId !== state.currentUserId ||
       exchange.status !== 'Accepted' ||
       exchange.payment.status !== 'Pending'
@@ -251,9 +340,13 @@ export const reducer = (state: AppState, action: Action): AppState => {
     }
   }
   if (action.type === 'createResource') {
+    const actor = state.users.find((user) => user.id === state.currentUserId)
+    if (actor && ownerVerificationLevel(actor.verification) !== 'Fully Verified') return state
     return { ...state, resources: [...state.resources, action.resource] }
   }
   if (action.type === 'createRequest') {
+    const actor = state.users.find((user) => user.id === state.currentUserId)
+    if (actor && ownerVerificationLevel(actor.verification) !== 'Fully Verified') return state
     return { ...state, requests: [action.request, ...state.requests] }
   }
   if (action.type === 'respondRequest') {
@@ -410,6 +503,42 @@ export const reducer = (state: AppState, action: Action): AppState => {
       ),
     }
   }
+  if (action.type === 'issueFine') {
+    const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
+    if (
+      !exchange ||
+      exchange.ownerId !== state.currentUserId ||
+      !['Inspection', 'Settlement'].includes(exchange.status) ||
+      action.amount <= 0
+    ) return state
+    const fine: Fine = {
+      id: `fine-${exchange.id}-${exchange.fines.length + 1}`,
+      reason: action.reason,
+      amount: action.amount,
+      ...(action.note ? { note: action.note } : {}),
+      issuedBy: state.currentUserId,
+      issuedAt: state.simulatedNow,
+      status: 'Pending',
+    }
+    return {
+      ...state,
+      exchanges: state.exchanges.map((item) =>
+        item.id === exchange.id ? { ...item, fines: [...item.fines, fine] } : item,
+      ),
+    }
+  }
+  if (action.type === 'waiveFine') {
+    const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
+    if (!state.isAdmin || !exchange || !exchange.fines.some((fine) => fine.id === action.fineId)) return state
+    return {
+      ...state,
+      exchanges: state.exchanges.map((item) =>
+        item.id === exchange.id
+          ? { ...item, fines: item.fines.map((fine) => fine.id === action.fineId ? { ...fine, status: 'Waived' as const } : fine) }
+          : item,
+      ),
+    }
+  }
   if (action.type === 'transition') {
     const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
     const role = exchange ? roleFor(exchange, state.currentUserId) : null
@@ -417,7 +546,8 @@ export const reducer = (state: AppState, action: Action): AppState => {
       !exchange ||
       !role ||
       !canTransition(exchange, action.status, role) ||
-      (action.status === 'Handover' && exchange.payment.status === 'Pending')
+      (action.status === 'Handover' && exchange.payment.status === 'Pending') ||
+      (action.status === 'Rated' && exchange.payment.outstanding?.status === 'Due')
     ) {
       return state
     }
@@ -427,7 +557,43 @@ export const reducer = (state: AppState, action: Action): AppState => {
         exchange.id === action.exchangeId
           ? {
               ...withTimeline(exchange, action.status, state.simulatedNow, action.note),
-              ...(action.status === 'Returned' ? { returnedAt: state.simulatedNow } : {}),
+              ...(action.status === 'Returned'
+                ? {
+                    returnedAt: state.simulatedNow,
+                    fines: (() => {
+                      const resource = state.resources.find((item) => item.id === exchange.resourceId)
+                      if (!resource) return exchange.fines
+                      const hoursLate = Math.max(
+                        0,
+                        Math.ceil(
+                          (new Date(state.simulatedNow).getTime() - new Date(exchange.plan.dueAt).getTime() -
+                            state.config.gracePeriodMinutes * 60000) /
+                            3600000,
+                        ),
+                      )
+                      if (!hoursLate) return exchange.fines
+                      const existing = exchange.fines.find((fine) => fine.reason === 'Late return')
+                      return existing
+                        ? exchange.fines.map((fine) =>
+                            fine.id === existing.id
+                              ? { ...fine, amount: hoursLate * resource.lateFeePerHour, status: 'Pending' as const }
+                              : fine,
+                          )
+                        : [
+                            ...exchange.fines,
+                            {
+                              id: `fine-late-${exchange.id}`,
+                              reason: 'Late return' as const,
+                              amount: hoursLate * resource.lateFeePerHour,
+                              note: `${hoursLate} hour(s) late`,
+                              issuedBy: exchange.ownerId,
+                              issuedAt: state.simulatedNow,
+                              status: 'Pending' as const,
+                            },
+                          ]
+                    })(),
+                  }
+                : {}),
             }
           : exchange,
       ),
@@ -474,6 +640,18 @@ export const reducer = (state: AppState, action: Action): AppState => {
                 status: 'Open',
                 raisedOn: state.simulatedNow,
               },
+              fines: [
+                ...exchange.fines,
+                {
+                  id: `fine-damage-${exchange.id}`,
+                  reason: 'Damage' as const,
+                  amount: Math.max(0, action.claimedAmount),
+                  note: action.description,
+                  issuedBy: exchange.ownerId,
+                  issuedAt: state.simulatedNow,
+                  status: 'Pending' as const,
+                },
+              ],
             }
           : exchange,
       ),
@@ -506,6 +684,22 @@ export const reducer = (state: AppState, action: Action): AppState => {
             exchange.charges.damageDeduction ??
             exchange.dispute?.claimedAmount ??
             0,
+          fines: exchange.fines
+            .filter((fine) => fine.status !== 'Waived')
+            .reduce((sum, fine) => sum + fine.amount, 0),
+          fineCapMultiplier: state.config.fineCapMultiplier ?? 2,
+          ...(exchange.fines.some((fine) => fine.status !== 'Waived')
+            ? {
+                fineSubtotals: {
+                  lateFee: exchange.fines
+                    .filter((fine) => fine.reason === 'Late return' && fine.status !== 'Waived')
+                    .reduce((sum, fine) => sum + fine.amount, 0),
+                  damageDeduction: exchange.fines
+                    .filter((fine) => fine.reason !== 'Late return' && fine.status !== 'Waived')
+                    .reduce((sum, fine) => sum + fine.amount, 0),
+                },
+              }
+            : {}),
         })
         return {
           ...withTimeline(exchange, 'Settlement', state.simulatedNow, 'Settlement completed.'),
@@ -522,11 +716,45 @@ export const reducer = (state: AppState, action: Action): AppState => {
               txnId: `CC-RFD-${exchange.id}`,
               at: state.simulatedNow,
             },
+            ...(pricing.outstanding > 0
+              ? { outstanding: { amount: pricing.outstanding, status: 'Due' as const } }
+              : {}),
           },
+          fines: exchange.fines.map((fine) =>
+            fine.status === 'Waived' ? fine : { ...fine, status: 'Settled' as const },
+          ),
         }
       }),
     }
   }
+  if (action.type === 'payOutstanding') {
+    const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
+    if (
+      !exchange ||
+      exchange.borrowerId !== state.currentUserId ||
+      exchange.payment.outstanding?.status !== 'Due'
+    ) return state
+    return {
+      ...state,
+      exchanges: state.exchanges.map((item) =>
+        item.id === exchange.id
+          ? {
+              ...item,
+              payment: {
+                ...item.payment,
+                outstanding: {
+                  ...item.payment.outstanding!,
+                  status: 'Paid' as const,
+                  txnId: `CC-FINE-${item.id}`,
+                  paidAt: state.simulatedNow,
+                },
+              },
+            }
+          : item,
+      ),
+    }
+  }
+  if (action.type !== 'rating') return state
   const exchangeForRating = state.exchanges.find((item) => item.id === action.exchangeId)
   const ratingRole = exchangeForRating ? roleFor(exchangeForRating, state.currentUserId) : null
   if (
@@ -534,6 +762,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
     !ratingRole ||
     action.side !== ratingRole ||
     (exchangeForRating.status !== 'Settlement' && exchangeForRating.status !== 'Rated')
+    || (action.side === 'borrower' && exchangeForRating.payment.outstanding?.status === 'Due')
   ) {
     return state
   }
