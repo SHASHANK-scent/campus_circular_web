@@ -52,8 +52,8 @@ npm run build
 
 ## GitHub Pages deployment
 
-The Vite base is configured for `/campus-circular/`, and the app uses `HashRouter`, so deep links survive hard refreshes on Pages. The workflow in `.github/workflows/pages.yml` runs lint, tests, and build on pushes to `main`, then deploys `dist` through the official Pages artifact and deployment actions.
+The Vite base is configured for `/campus_circular_web/`, and the app uses `HashRouter`, so deep links survive hard refreshes on Pages. The workflow in `.github/workflows/pages.yml` runs lint, tests, and build on pushes to `main`, then deploys `dist` through the official Pages artifact and deployment actions.
 
 After enabling GitHub Pages with **GitHub Actions** as the source, the site is available at:
 
-<https://SHASHANK-scent.github.io/campus-circular/>
+<https://shashank-scent.github.io/campus_circular_web/>

@@ -3,6 +3,6 @@ import { defineConfig } from 'vite'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/campus-circular/',
+  base: '/campus_circular_web/',
   plugins: [react()],
 })
