@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { seedResources } from '../data/seed'
+import { seedExchanges, seedResources } from '../data/seed'
 import type { AppState, Exchange } from '../data/types'
 import { canTransition, roleFor, settlementForExchange } from './lifecycle'
 import { reducer } from '../store/AppStore'
@@ -29,6 +29,10 @@ const baseExchange = (status: Exchange['status'] = 'Borrowed'): Exchange => ({
 })
 
 describe('exchange lifecycle', () => {
+  it('keeps every seeded exchange between different people', () => {
+    expect(seedExchanges().every((exchange) => exchange.ownerId !== exchange.borrowerId)).toBe(true)
+  })
+
   it('allows only the correct role to perform each transition', () => {
     const requested = baseExchange('Requested')
     expect(roleFor(requested, 'u2')).toBe('owner')

@@ -21,7 +21,7 @@ import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { calculatePricing } from '../lib/pricing'
 
 const KEY = 'cc.state.v1'
-export const STATE_VERSION = 2
+export const STATE_VERSION = 3
 
 export type Action =
   | { type: 'advance'; hours: number }

@@ -9,6 +9,8 @@ import {
   Wrench,
 } from 'lucide-react'
 import type { Resource } from '../data/types'
+
+type ResourceImageData = Partial<Pick<Resource, 'category' | 'id' | 'title' | 'images'>>
 const icons = {
   'Camera & Video': Camera,
   Audio: Headphones,
@@ -30,19 +32,24 @@ export const ResourceImage = ({
   resource,
   small = false,
 }: {
-  resource: Resource
+  resource: ResourceImageData
   small?: boolean
 }) => {
-  const Icon = icons[resource.category]
-  const gradient =
-    gradients[Number((resource.id ?? resource.title).replace(/\D/g, '') || 0) % gradients.length]
+  const category =
+    resource.category && resource.category in icons ? resource.category : 'Event & Decor'
+  const Icon = icons[category]
+  const gradient = getResourceGradient(resource)
   return (
     <div
       className={`relative flex ${small ? 'h-20 w-20 rounded-lg' : 'h-52 rounded-xl'} items-center justify-center overflow-hidden bg-gradient-to-br ${gradient}`}
     >
       <div className="absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/30" />
-      {resource.images[0] ? (
-        <img src={resource.images[0]} alt={resource.title} className="h-full w-full object-cover" />
+      {resource.images?.[0] ? (
+        <img
+          src={resource.images[0]}
+          alt={resource.title ?? 'Campus resource'}
+          className="h-full w-full object-cover"
+        />
       ) : (
         <Icon
           className={`${small ? 'h-8 w-8' : 'h-16 w-16'} text-slate-700/45`}
@@ -50,8 +57,13 @@ export const ResourceImage = ({
         />
       )}
       <span className="absolute bottom-3 left-3 rounded-full bg-white/65 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-600">
-        {resource.category}
+        {category}
       </span>
     </div>
   )
 }
+
+export const getResourceGradient = (resource: Partial<Pick<Resource, 'id' | 'title'>>) =>
+  gradients[
+    Number((resource.id ?? resource.title ?? '').replace(/\D/g, '') || 0) % gradients.length
+  ]

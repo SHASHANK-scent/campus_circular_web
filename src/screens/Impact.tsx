@@ -37,7 +37,7 @@ export const Impact = () => {
           ['Successful exchanges', metrics.successfulExchanges, <BarChart3 key="bar" />],
           ['On-time returns', `${metrics.onTimePercent}%`, <LineIcon key="line" />],
           ['Money saved', money(metrics.moneySaved), <span key="money">₹</span>],
-          ['Items reused', metrics.itemsReused, <Recycle key="reuse" />],
+          ['Resources reused', metrics.itemsReused, <Recycle key="reuse" />],
           ['Ownership avoided', `${metrics.ownershipAvoided.toFixed(1)} kg`, <Leaf key="leaf" />],
         ].map(([label, value, icon]) => (
           <div

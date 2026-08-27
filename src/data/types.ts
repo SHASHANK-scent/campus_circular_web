@@ -56,6 +56,7 @@ export interface Resource {
   distanceMeters: number
   hourlyCharge: number
   dailyCharge: number
+  retailValue: number
   minimumCharge: number
   deposit: number
   lateFeePerHour: number

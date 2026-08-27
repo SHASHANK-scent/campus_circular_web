@@ -14,6 +14,7 @@ const resource: Resource = {
   distanceMeters: 10,
   hourlyCharge: 5,
   dailyCharge: 100,
+  retailValue: 1000,
   minimumCharge: 50,
   deposit: 300,
   lateFeePerHour: 100,

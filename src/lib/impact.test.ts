@@ -5,15 +5,38 @@ import { aggregateImpact } from './impact'
 describe('impact aggregations', () => {
   it('calculates money saved and on-time percentage from exchanges', () => {
     const state = structuredClone(seedState)
-    state.exchanges = state.exchanges.slice(0, 2)
-    state.exchanges[0].status = 'Returned'
-    state.exchanges[0].returnedAt = state.exchanges[0].plan.dueAt
-    state.exchanges[1].status = 'Returned'
-    state.exchanges[1].returnedAt = new Date(
-      new Date(state.exchanges[1].plan.dueAt).getTime() + 3600000,
-    ).toISOString()
+    state.exchanges = []
+    state.resources = [
+      {
+        ...state.resources[0],
+        retailValue: 5000,
+        dailyCharge: 100,
+        timesBorrowed: 3,
+        history: [
+          {
+            exchangeId: 'history-on-time',
+            borrowerId: 'u2',
+            onTime: true,
+            endedOn: '2025-03-01T10:00:00.000Z',
+          },
+          {
+            exchangeId: 'history-late',
+            borrowerId: 'u3',
+            onTime: false,
+            endedOn: '2025-03-02T10:00:00.000Z',
+          },
+        ],
+      },
+    ]
     const metrics = aggregateImpact(state)
     expect(metrics.onTimePercent).toBe(50)
-    expect(metrics.moneySaved).toBeGreaterThan(0)
+    expect(metrics.moneySaved).toBe(1200)
+    expect(metrics.itemsReused).toBe(1)
+  })
+
+  it('keeps exchange and fee revenue timelines spread across seeded dates', () => {
+    const metrics = aggregateImpact(structuredClone(seedState))
+    expect(metrics.exchangesOverTime.length).toBeGreaterThan(1)
+    expect(metrics.feeRevenueOverTime.length).toBeGreaterThan(1)
   })
 })

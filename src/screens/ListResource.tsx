@@ -64,6 +64,7 @@ export const ListResource = () => {
       distanceMeters: 0,
       hourlyCharge,
       dailyCharge,
+      retailValue: Math.max(1000, dailyCharge * 12),
       minimumCharge,
       deposit,
       lateFeePerHour: 15,
@@ -255,7 +256,7 @@ export const ListResource = () => {
           <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">
             Live preview
           </p>
-          <ResourceImage resource={{ title, category, condition } as Resource} />
+          <ResourceImage resource={{ title, category }} />
           <div className="p-2">
             <h2 className="font-black">{title || 'Your resource name'}</h2>
             <p className="mt-1 text-xs text-slate-500">

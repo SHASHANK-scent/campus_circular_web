@@ -67,6 +67,30 @@ export const ExchangeSidebar = ({
           )
         ) : exchange.status === 'Returned' && role === 'owner' ? (
           <p className="mt-3 text-xs text-slate-500">Complete the return inspection on the left.</p>
+        ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
+          role === 'borrower' &&
+          !exchange.ratingByBorrower ? (
+          <p className="mt-3 text-xs font-bold text-emerald-700">
+            Your rating is the next step. Share how this exchange went.
+          </p>
+        ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
+          role === 'owner' &&
+          !exchange.ratingByOwner ? (
+          <p className="mt-3 text-xs font-bold text-emerald-700">
+            Your rating is the next step. Share how this exchange went.
+          </p>
+        ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
+          role === 'owner' &&
+          exchange.ratingByOwner &&
+          !exchange.ratingByBorrower ? (
+          <p className="mt-3 text-xs text-slate-500">Waiting for the borrower to leave a rating.</p>
+        ) : (exchange.status === 'Settlement' || exchange.status === 'Rated') &&
+          role === 'borrower' &&
+          exchange.ratingByBorrower &&
+          !exchange.ratingByOwner ? (
+          <p className="mt-3 text-xs text-slate-500">Waiting for the owner to leave a rating.</p>
+        ) : exchange.status === 'Rated' ? (
+          <p className="mt-3 text-xs text-slate-500">Exchange complete.</p>
         ) : exchange.status === 'Settlement' && role === 'owner' ? (
           <>
             {exchange.dispute && (
@@ -96,11 +120,7 @@ export const ExchangeSidebar = ({
             </button>
           </>
         ) : (
-          <p className="mt-3 text-xs text-slate-500">
-            {exchange.status === 'Rated'
-              ? 'Exchange complete.'
-              : 'No action required from you right now.'}
-          </p>
+          <p className="mt-3 text-xs text-slate-500">No action required from you right now.</p>
         )}
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

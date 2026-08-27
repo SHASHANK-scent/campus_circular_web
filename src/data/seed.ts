@@ -3,6 +3,11 @@ import type { AppState, Category, Condition, Resource, User } from './types'
 const now = new Date('2025-03-15T10:00:00+05:30')
 const iso = (days: number, hours = 0) =>
   new Date(now.getTime() + (days * 24 + hours) * 3600000).toISOString()
+const exchangeAges = [56, 45, 35, 28, 21, 14, 7, 3]
+const evidencePhoto =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23ffe4e6'/%3E%3Ccircle cx='80' cy='60' r='32' fill='%23fb7185'/%3E%3Cpath d='M57 80l46-40M65 88l42-34' stroke='%239f1239' stroke-width='6'/%3E%3C/svg%3E"
+const afterEvidencePhoto =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23fee2e2'/%3E%3Crect x='42' y='30' width='76' height='60' rx='12' fill='%23fb7185'/%3E%3Cpath d='M58 72l44-30' stroke='%239f1239' stroke-width='7'/%3E%3C/svg%3E"
 export const seedUsers: User[] = [
   {
     id: 'u1',
@@ -248,6 +253,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
   distanceMeters: 180 + ((index * 173) % 1750),
   hourlyCharge: 8 + (index % 5) * 4,
   dailyCharge: 80 + (index % 7) * 30,
+  retailValue: 1200 + index * 350,
   minimumCharge: 40 + (index % 3) * 20,
   deposit: 300 + (index % 6) * 150,
   lateFeePerHour: 10 + (index % 4) * 5,
@@ -271,7 +277,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
             exchangeId: `ex${(index % 6) + 1}`,
             borrowerId: `u${(index % 8) + 1}`,
             onTime: index % 8 !== 0,
-            endedOn: iso(-index - 1),
+            endedOn: iso(-((index * 7) % 56) - 2),
             note: 'Returned in great shape',
           },
         ]
@@ -280,7 +286,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 2,
+  stateVersion: 3,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],
@@ -340,18 +346,45 @@ export const seedExchanges = (): AppState['exchanges'] => {
   ] as const
   return plans.map(([resourceId, borrowerId, status, units], index) => {
     const resource = seedResources.find((item) => item.id === resourceId) ?? seedResources[0]
-    const startAt = iso(-index - 1)
-    const dueAt = iso(-index + units)
+    const age = exchangeAges[index]
+    const safeBorrowerId =
+      borrowerId === resource.ownerId ? (resource.ownerId === 'u1' ? 'u2' : 'u1') : borrowerId
+    const startAt = iso(-age)
+    const dueAt = status === 'Borrowed' ? iso(2) : iso(-age + units)
+    const returnedOn = iso(-age + units)
+    const reportBefore = {
+      at: startAt,
+      by: resource.ownerId,
+      overall: 'Good' as const,
+      checklist: [
+        { label: 'Body and finish', ok: true },
+        { label: 'Controls and ports', ok: true },
+        { label: 'Accessories', ok: true },
+      ],
+      photos: [evidencePhoto],
+      notes: 'Recorded at handover.',
+    }
+    const reportAfter = {
+      ...reportBefore,
+      at: returnedOn,
+      photos: [afterEvidencePhoto],
+      checklist: [
+        { label: 'Body and finish', ok: false, note: 'Small scratch on the body.' },
+        { label: 'Controls and ports', ok: true },
+        { label: 'Accessories', ok: true },
+      ],
+      notes: 'Scratch documented during return inspection.',
+    }
     return {
       id: `ex${index + 1}`,
       resourceId,
       ownerId: resource.ownerId,
-      borrowerId,
-      createdOn: iso(-index - 2),
+      borrowerId: safeBorrowerId,
+      createdOn: iso(-age - 2),
       status,
       timeline: [
-        { status: 'Requested' as const, at: iso(-index - 2) },
-        { status, at: iso(-index) },
+        { status: 'Requested' as const, at: iso(-age - 2) },
+        { status, at: startAt },
       ],
       plan: { mode: 'daily' as const, units, startAt, dueAt },
       charges: {
@@ -369,15 +402,17 @@ export const seedExchanges = (): AppState['exchanges'] => {
               raisedBy: resource.ownerId,
               type: 'Damage' as const,
               description: 'Small scratch found on the body during inspection.',
-              evidence: [],
+              evidence: [evidencePhoto, afterEvidencePhoto],
               claimedAmount: 250,
               status: 'Open' as const,
-              raisedOn: iso(-1),
+              raisedOn: returnedOn,
             }
           : undefined,
+      before: status === 'Inspection' ? reportBefore : undefined,
+      after: status === 'Inspection' ? reportAfter : undefined,
       returnedAt:
         status === 'Inspection' || status === 'Settlement' || status === 'Rated'
-          ? iso(-1)
+          ? returnedOn
           : undefined,
       ratingByOwner:
         status === 'Rated'

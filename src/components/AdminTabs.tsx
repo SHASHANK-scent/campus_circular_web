@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Check, Flag, ShieldAlert, Trash2, UserCheck, X } from 'lucide-react'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import { aggregateImpact } from '../lib/impact'
+import { formatDate } from '../lib/clock'
 import { Badge, money } from './Layout'
 import { useApp } from '../store/AppStore'
 
@@ -14,6 +25,7 @@ export const AdminTabs = () => {
   const [feeMax, setFeeMax] = useState(state.config.platformFeeMax)
   const [grace, setGrace] = useState(state.config.gracePeriodMinutes)
   const revenue = state.exchanges.reduce((sum, exchange) => sum + exchange.charges.platformFee, 0)
+  const impact = aggregateImpact(state)
   const filteredExchanges = useMemo(
     () =>
       state.exchanges.filter(
@@ -36,7 +48,9 @@ export const AdminTabs = () => {
           ),
         )}
       </div>
-      {tab === 'Overview' && <Overview revenue={revenue} state={state} />}
+      {tab === 'Overview' && (
+        <Overview revenue={revenue} state={state} revenueOverTime={impact.feeRevenueOverTime} />
+      )}
       {tab === 'Users' && <UsersPanel />}
       {tab === 'Resources' && <ResourcesPanel />}
       {tab === 'Exchanges' && (
@@ -292,6 +306,9 @@ export const AdminTabs = () => {
     )
     const [resolution, setResolution] = useState(exchange.dispute?.resolution ?? '')
     if (!exchange.dispute) return null
+    const resource = state.resources.find((item) => item.id === exchange.resourceId)
+    const owner = state.users.find((user) => user.id === exchange.ownerId)
+    const borrower = state.users.find((user) => user.id === exchange.borrowerId)
     return (
       <div className="rounded-2xl border border-rose-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
@@ -299,13 +316,21 @@ export const AdminTabs = () => {
           <div className="flex-1">
             <div className="flex justify-between gap-3">
               <h2 className="font-black">
-                {exchange.id} · {exchange.dispute.type}
+                {resource?.title ?? exchange.resourceId} · {exchange.dispute.type}
               </h2>
               <Badge tone={exchange.dispute.status === 'Open' ? 'rose' : 'green'}>
                 {exchange.dispute.status}
               </Badge>
             </div>
             <p className="mt-2 text-xs text-slate-600">{exchange.dispute.description}</p>
+            <p className="mt-2 text-xs text-slate-500">
+              Owner: <strong>{owner?.name ?? exchange.ownerId}</strong> · Borrower:{' '}
+              <strong>{borrower?.name ?? exchange.borrowerId}</strong>
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Exchange: {formatDate(exchange.plan.startAt)} → {formatDate(exchange.plan.dueAt)} ·
+              Dispute raised {formatDate(exchange.dispute.raisedOn)}
+            </p>
             <p className="mt-2 text-xs font-bold">
               Claimed {money(exchange.dispute.claimedAmount)} · Evidence{' '}
               {exchange.dispute.evidence.length}
@@ -378,9 +403,11 @@ export const AdminTabs = () => {
 const Overview = ({
   revenue,
   state,
+  revenueOverTime,
 }: {
   revenue: number
   state: ReturnType<typeof useApp>['state']
+  revenueOverTime: { label: string; revenue: number }[]
 }) => (
   <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
     {[
@@ -409,17 +436,22 @@ const Overview = ({
     ))}
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:col-span-2 lg:col-span-4">
       <h2 className="text-lg font-black">Revenue from platform fees</h2>
-      <div className="mt-4 flex h-20 items-end gap-2">
-        {state.exchanges.map((exchange, index) => (
-          <div
-            className="flex-1 rounded-t bg-emerald-500"
-            style={{ height: `${Math.max(15, exchange.charges.platformFee * 2)}%` }}
-            key={exchange.id}
-            title={`${exchange.id}: ${money(exchange.charges.platformFee)}`}
-          >
-            <span className="sr-only">{index}</span>
-          </div>
-        ))}
+      <div className="mt-4 h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={revenueOverTime}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis
+              dataKey="label"
+              label={{ value: 'Date', position: 'insideBottom', offset: -5 }}
+            />
+            <YAxis
+              tickFormatter={(value: number) => `₹${value}`}
+              label={{ value: 'Platform fees (₹)', angle: -90, position: 'insideLeft' }}
+            />
+            <Tooltip formatter={(value: number) => money(value)} />
+            <Line type="monotone" dataKey="revenue" stroke="#059669" strokeWidth={3} />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   </div>
