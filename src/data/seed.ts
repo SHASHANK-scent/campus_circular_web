@@ -274,7 +274,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
     index % 4 === 0
       ? [
           {
-            exchangeId: `ex${(index % 6) + 1}`,
+            exchangeId: `history-${index + 1}`,
             borrowerId: `u${(index % 8) + 1}`,
             onTime: index % 8 !== 0,
             endedOn: iso(-((index * 7) % 56) - 2),
