@@ -9,6 +9,29 @@ describe('matching engine', () => {
     expect(intent.mode).toBe('daily')
     expect(intent.units).toBe(1)
     expect(new Date(intent.dueAt).getTime() - new Date(intent.startAt).getTime()).toBe(86400000)
-    expect(matchIntent(intent, seedResources, seedUsers).map((slot) => slot.tag)).toEqual(expect.arrayContaining(['camera', 'tripod', 'microphone', 'light']))
+    const kit = matchIntent(intent, seedResources, seedUsers)
+    expect(kit.map((slot) => slot.tag)).toEqual(
+      expect.arrayContaining(['camera', 'tripod', 'microphone', 'lighting']),
+    )
+    const primaryResources = kit
+      .slice(0, 5)
+      .map((slot) => slot.recommendation?.resource)
+    expect(primaryResources[0]?.tags[0]).toBe('camera')
+    expect(primaryResources[0]?.id).not.toBe('r3')
+    expect(primaryResources[1]?.id).toBe('r3')
+    expect(primaryResources[2]?.tags[0]).toBe('microphone')
+    expect(primaryResources[3]?.tags[0]).toBe('light')
+    const recommendedIds = kit
+      .map((slot) => slot.recommendation?.resource.id)
+      .filter((id): id is string => Boolean(id))
+    expect(new Set(recommendedIds).size).toBe(recommendedIds.length)
+  })
+
+  it('does not use a category-only near miss for a slot', () => {
+    const intent = parseIntent('I need a reel tomorrow', new Date('2025-03-15T10:00:00.000Z'))
+    const tripodOnly = seedResources.find((resource) => resource.id === 'r3')
+    expect(tripodOnly).toBeDefined()
+    const kit = matchIntent(intent, [tripodOnly!], seedUsers)
+    expect(kit.find((slot) => slot.tag === 'camera')?.recommendation).toBeUndefined()
   })
 })
