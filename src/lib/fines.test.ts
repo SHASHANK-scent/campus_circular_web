@@ -9,7 +9,6 @@ describe('fine settlement', () => {
       gracePeriodMinutes: 30,
       dueAt: '2025-03-10T10:00:00.000Z',
       returnedAt: '2025-03-10T10:00:00.000Z',
-      damageDeduction: 0,
       fines: 800,
       fineCapMultiplier: 2,
       fineSubtotals: { lateFee: 800, damageDeduction: 0 },

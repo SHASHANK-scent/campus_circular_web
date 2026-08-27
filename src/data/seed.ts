@@ -508,7 +508,6 @@ export const seedExchanges = (): AppState['exchanges'] => {
       gracePeriodMinutes: 30,
       dueAt,
       returnedAt: returnedOn,
-      damageDeduction: charges.damageDeduction,
       fines: activeFinesTotal(fines),
       fineCapMultiplier: 2,
       fineSubtotals: activeFineSubtotals(fines),

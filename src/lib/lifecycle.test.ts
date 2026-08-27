@@ -436,7 +436,11 @@ describe('exchange lifecycle', () => {
       isAdmin: true,
       session: { loggedIn: true },
     }
-    const settled = reducer(state, { type: 'settle', exchangeId: 'test-exchange' })
+    const settled = reducer(state, {
+      type: 'settle',
+      exchangeId: 'test-exchange',
+      damageDeduction: 0,
+    })
     const exchange = settled.exchanges[0]
     expect(exchange.payment.refund?.amount).toBe(resource.deposit)
     expect(exchange.payment.outstanding).toBeUndefined()
@@ -446,12 +450,62 @@ describe('exchange lifecycle', () => {
       settlementForExchange(exchange, resource, state.config, state.simulatedNow).finesTotal,
     ).toBe(0)
     expect(
+      settlementForExchange(exchange, resource, state.config, state.simulatedNow).outstanding,
+    ).toBe(0)
+    expect(
       reducer(settled, {
         type: 'waiveFine',
         exchangeId: 'test-exchange',
         fineId: 'fine-late-test',
       }),
     ).toBe(settled)
+  })
+
+  it('charges a settlement damage amount through a recorded damage fine', () => {
+    const preview = settlementForExchange(
+      { ...baseExchange('Settlement'), returnedAt: '2025-03-16T10:00:00.000Z' },
+      resource,
+      {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
+      },
+      '2025-03-16T10:00:00.000Z',
+      200,
+    )
+    expect(preview.damageDeduction).toBe(200)
+    expect(preview.refund).toBe(resource.deposit - 200)
+
+    const state: AppState = {
+      stateVersion: 8,
+      users: [],
+      resources: [resource],
+      exchanges: [{ ...baseExchange('Settlement'), returnedAt: '2025-03-16T10:00:00.000Z' }],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
+      },
+      currentUserId: 'u2',
+      simulatedNow: '2025-03-16T10:00:00.000Z',
+      isAdmin: true,
+      session: { loggedIn: true },
+    }
+    const settled = reducer(state, {
+      type: 'settle',
+      exchangeId: 'test-exchange',
+      damageDeduction: 200,
+    })
+    expect(settled.exchanges[0].fines).toContainEqual(
+      expect.objectContaining({ reason: 'Damage', amount: 200, status: 'Settled' }),
+    )
+    expect(settled.exchanges[0].payment.refund?.amount).toBe(resource.deposit - 200)
+    expect(settled.exchanges[0].charges.damageDeduction).toBe(200)
   })
 
   it('does not charge a late fine inside the grace period', () => {

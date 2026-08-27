@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { ExchangeMainPanel } from '../components/ExchangeMainPanel'
@@ -14,6 +15,13 @@ export const ExchangeDetail = () => {
   const resource = exchange
     ? state.resources.find((item) => item.id === exchange.resourceId)
     : undefined
+  const [damageDeduction, setDamageDeduction] = useState(0)
+  const [damageDeductionEdited, setDamageDeductionEdited] = useState(false)
+  useEffect(() => {
+    if (!exchange) return
+    setDamageDeduction(exchange.fines.find((fine) => fine.reason === 'Damage')?.amount ?? 0)
+    setDamageDeductionEdited(false)
+  }, [exchange])
   if (!exchange || !resource) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-16 text-center">
@@ -42,6 +50,8 @@ export const ExchangeDetail = () => {
           role={role}
           now={state.simulatedNow}
           dispatch={dispatch}
+          damageDeduction={damageDeduction}
+          damageDeductionEdited={damageDeductionEdited}
         />
         <ExchangeSidebar
           exchange={exchange}
@@ -50,6 +60,12 @@ export const ExchangeDetail = () => {
           role={role}
           now={state.simulatedNow}
           dispatch={dispatch}
+          damageDeduction={damageDeduction}
+          onDamageDeductionChange={(amount) => {
+            setDamageDeductionEdited(true)
+            setDamageDeduction(amount)
+          }}
+          damageDeductionEdited={damageDeductionEdited}
         />
       </div>
     </>

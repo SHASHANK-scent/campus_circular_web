@@ -1,4 +1,4 @@
-import { useState, type Dispatch } from 'react'
+import type { Dispatch } from 'react'
 import type { Exchange, PlatformConfig, Resource } from '../data/types'
 import { canTransition, roleFor, settlementForExchange } from '../lib/lifecycle'
 import type { Action } from '../store/AppStore'
@@ -12,6 +12,9 @@ export const ExchangeSidebar = ({
   role,
   now,
   dispatch,
+  damageDeduction,
+  onDamageDeductionChange,
+  damageDeductionEdited,
 }: {
   exchange: Exchange
   resource: Resource
@@ -19,9 +22,17 @@ export const ExchangeSidebar = ({
   role: ReturnType<typeof roleFor>
   now: string
   dispatch: Dispatch<Action>
+  damageDeduction: number
+  onDamageDeductionChange: (amount: number) => void
+  damageDeductionEdited: boolean
 }) => {
-  const [adminDeduction, setAdminDeduction] = useState(0)
-  const pricing = settlementForExchange(exchange, resource, config, now)
+  const pricing = settlementForExchange(
+    exchange,
+    resource,
+    config,
+    now,
+    damageDeductionEdited ? damageDeduction : undefined,
+  )
   const transition = (status: Exchange['status'], note?: string) => {
     if (role && canTransition(exchange, status, role)) {
       dispatch({ type: 'transition', exchangeId: exchange.id, status, note })
@@ -99,25 +110,40 @@ export const ExchangeSidebar = ({
           role === 'owner' &&
           exchange.payment.status !== 'Refunded' ? (
           <>
-            {exchange.dispute && (
-              <label className="mt-4 block text-xs font-bold text-slate-600">
-                Approved damage deduction
-                <input
-                  type="number"
-                  min="0"
-                  max={exchange.charges.deposit}
-                  value={adminDeduction}
-                  onChange={(event) => setAdminDeduction(Number(event.target.value))}
-                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
-                />
-              </label>
-            )}
+            <label className="mt-4 block text-xs font-bold text-slate-600">
+              Damage amount to charge
+              <input
+                type="number"
+                min="0"
+                max={exchange.charges.deposit * config.fineCapMultiplier}
+                value={damageDeduction}
+                onChange={(event) => onDamageDeductionChange(Number(event.target.value))}
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-xs"
+              />
+            </label>
+            <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-black">Existing fines</p>
+              {exchange.fines.length > 0 ? (
+                exchange.fines.map((fine) => (
+                  <div className="mt-1 flex justify-between" key={fine.id}>
+                    <span>{fine.reason} · {fine.status}</span>
+                    <b>{money(fine.amount)}</b>
+                  </div>
+                ))
+              ) : (
+                <p className="mt-1 text-amber-800">No other fines issued.</p>
+              )}
+              <div className="mt-2 flex justify-between border-t border-amber-200 pt-2 font-black">
+                <span>Total to charge</span>
+                <b>{money(pricing.finesTotal)}</b>
+              </div>
+            </div>
             <button
               onClick={() =>
                 dispatch({
                   type: 'settle',
                   exchangeId: exchange.id,
-                  damageDeduction: exchange.dispute ? adminDeduction : undefined,
+                  damageDeduction: damageDeductionEdited ? damageDeduction : undefined,
                 })
               }
               className="mt-4 w-full rounded-xl bg-emerald-600 py-3 text-xs font-bold text-white"

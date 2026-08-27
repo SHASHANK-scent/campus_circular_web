@@ -243,6 +243,8 @@ export const ExchangeMainPanel = ({
   role,
   now,
   dispatch,
+  damageDeduction,
+  damageDeductionEdited,
 }: {
   exchange: Exchange
   resource: Resource
@@ -250,6 +252,8 @@ export const ExchangeMainPanel = ({
   role: ReturnType<typeof roleFor>
   now: string
   dispatch: Dispatch<Action>
+  damageDeduction?: number
+  damageDeductionEdited?: boolean
 }) => {
   const [showDamage, setShowDamage] = useState(false)
   const transition = (status: Exchange['status'], note?: string) => {
@@ -257,7 +261,13 @@ export const ExchangeMainPanel = ({
       dispatch({ type: 'transition', exchangeId: exchange.id, status, note })
     }
   }
-  const pricing = settlementForExchange(exchange, resource, config, now)
+  const pricing = settlementForExchange(
+    exchange,
+    resource,
+    config,
+    now,
+    damageDeductionEdited ? damageDeduction : undefined,
+  )
   return (
     <section className="space-y-5">
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -454,7 +464,13 @@ export const ExchangeMainPanel = ({
         </div>
       )}
       {(exchange.status === 'Settlement' || exchange.status === 'Rated') && (
-        <SettlementBreakdown exchange={exchange} resource={resource} config={config} now={now} />
+        <SettlementBreakdown
+          exchange={exchange}
+          resource={resource}
+          config={config}
+          now={now}
+          damageDeduction={damageDeductionEdited ? damageDeduction : undefined}
+        />
       )}
       {(exchange.status === 'Settlement' || exchange.status === 'Rated') && (
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

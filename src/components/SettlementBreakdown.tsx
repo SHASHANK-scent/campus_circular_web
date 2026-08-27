@@ -7,13 +7,15 @@ export const SettlementBreakdown = ({
   resource,
   config,
   now,
+  damageDeduction,
 }: {
   exchange: Exchange
   resource: Resource
   config: PlatformConfig
   now: string
+  damageDeduction?: number
 }) => {
-  const pricing = settlementForExchange(exchange, resource, config, now)
+  const pricing = settlementForExchange(exchange, resource, config, now, damageDeduction)
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <p className="text-xs font-bold uppercase tracking-widest text-emerald-700">Settlement</p>

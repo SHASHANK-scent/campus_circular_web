@@ -25,7 +25,7 @@ import type {
   User,
 } from '../data/types'
 import { advanceClock } from '../lib/clock'
-import { activeFineSubtotals, applyLateFine } from '../lib/fines'
+import { activeFineSubtotals, applyDamageFine, applyLateFine } from '../lib/fines'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { settleCharges } from '../lib/pricing'
 import {
@@ -647,25 +647,24 @@ export const reducer = (state: AppState, action: Action): AppState => {
         const resource = state.resources.find((item) => item.id === exchange.resourceId)
         if (!resource) return exchange
         if (exchange.payment.status === 'Refunded') return exchange
+        const preparedExchange =
+          action.damageDeduction === undefined
+            ? exchange
+            : applyDamageFine(exchange, action.damageDeduction, state.simulatedNow)
         const pricing = settleCharges({
-          charges: exchange.charges,
+          charges: preparedExchange.charges,
           lateFeePerHour: resource.lateFeePerHour,
           gracePeriodMinutes: state.config.gracePeriodMinutes,
           dueAt: exchange.plan.dueAt,
           returnedAt: exchange.returnedAt ?? state.simulatedNow,
-          damageDeduction:
-            action.damageDeduction ??
-            exchange.charges.damageDeduction ??
-            exchange.dispute?.claimedAmount ??
-            0,
-          fines: exchange.fines
+          fines: preparedExchange.fines
             .filter((fine) => fine.status !== 'Waived')
             .reduce((sum, fine) => sum + fine.amount, 0),
           fineCapMultiplier: state.config.fineCapMultiplier,
-          fineSubtotals: activeFineSubtotals(exchange.fines),
+          fineSubtotals: activeFineSubtotals(preparedExchange.fines),
         })
         return {
-          ...withTimeline(exchange, 'Settlement', state.simulatedNow, 'Settlement completed.'),
+          ...withTimeline(preparedExchange, 'Settlement', state.simulatedNow, 'Settlement completed.'),
           charges: {
             ...exchange.charges,
             lateFee: pricing.lateFee,
@@ -683,7 +682,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
               ? { outstanding: { amount: pricing.outstanding, status: 'Due' as const } }
               : {}),
           },
-          fines: exchange.fines.map((fine) =>
+          fines: preparedExchange.fines.map((fine) =>
             fine.status === 'Waived' ? fine : { ...fine, status: 'Settled' as const },
           ),
         }

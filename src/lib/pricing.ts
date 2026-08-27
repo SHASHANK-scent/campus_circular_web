@@ -27,7 +27,6 @@ export interface SettlementInput {
   gracePeriodMinutes: number
   dueAt: string
   returnedAt: string
-  damageDeduction: number
   fines: number
   fineCapMultiplier: number
   fineSubtotals: { lateFee: number; damageDeduction: number }

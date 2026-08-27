@@ -15,6 +15,41 @@ export const activeFinesTotal = (fines: Fine[]): number =>
     .filter((fine) => fine.status !== 'Waived')
     .reduce((sum, fine) => sum + fine.amount, 0)
 
+export const applyDamageFine = (exchange: Exchange, amount: number, at: string): Exchange => {
+  const damageAmount = Math.max(0, amount)
+  const existing = exchange.fines.find((fine) => fine.reason === 'Damage')
+  if (!existing && damageAmount === 0) return exchange
+  const fines = existing
+    ? exchange.fines.map((fine) =>
+        fine.id === existing.id
+          ? {
+              ...fine,
+              amount: damageAmount,
+              status:
+                fine.status === 'Waived' && damageAmount === 0
+                  ? ('Waived' as const)
+                  : ('Pending' as const),
+            }
+          : fine,
+      )
+    : [
+        ...exchange.fines,
+        {
+          id: `fine-damage-${exchange.id}`,
+          reason: 'Damage' as const,
+          amount: damageAmount,
+          issuedBy: exchange.ownerId,
+          issuedAt: at,
+          status: 'Pending' as const,
+        },
+      ]
+  return {
+    ...exchange,
+    fines,
+    charges: { ...exchange.charges, damageDeduction: damageAmount },
+  }
+}
+
 export const applyLateFine = (
   exchange: Exchange,
   resource: Resource,
