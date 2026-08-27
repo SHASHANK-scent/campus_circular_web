@@ -101,6 +101,7 @@ describe('exchange lifecycle', () => {
 
   it('moves a borrowed exchange to Return Due as the demo clock advances', () => {
     const state: AppState = {
+      stateVersion: 2,
       users: [],
       resources: [resource],
       exchanges: [baseExchange()],
@@ -122,6 +123,7 @@ describe('exchange lifecycle', () => {
 
   it('stores an admin-set deduction when settlement is completed', () => {
     const state: AppState = {
+      stateVersion: 2,
       users: [],
       resources: [resource],
       exchanges: [
@@ -149,5 +151,54 @@ describe('exchange lifecycle', () => {
     expect(settled.exchanges[0].status).toBe('Settlement')
     expect(settled.exchanges[0].charges.damageDeduction).toBe(125)
     expect(settled.exchanges[0].charges.lateFee).toBe(0)
+  })
+
+  it('feeds an admin dispute resolution into settlement damage deduction', () => {
+    const state: AppState = {
+      stateVersion: 2,
+      users: [],
+      resources: [resource],
+      exchanges: [
+        {
+          ...baseExchange('Inspection'),
+          dispute: {
+            id: 'd-test',
+            raisedBy: 'u2',
+            type: 'Damage',
+            description: 'A scratch was found.',
+            evidence: [],
+            claimedAmount: 200,
+            status: 'Open',
+            raisedOn: '2025-03-16T10:00:00.000Z',
+          },
+        },
+      ],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+      },
+      currentUserId: 'u1',
+      simulatedNow: '2025-03-16T10:00:00.000Z',
+      isAdmin: true,
+    }
+    const resolved = reducer(state, {
+      type: 'resolveDispute',
+      exchangeId: 'test-exchange',
+      status: 'Resolved',
+      damageDeduction: 125,
+      resolution: 'Approved partial claim.',
+    })
+    expect(resolved.exchanges[0].charges.damageDeduction).toBe(125)
+    const settlement = settlementForExchange(
+      resolved.exchanges[0],
+      resource,
+      state.config,
+      state.simulatedNow,
+    )
+    expect(settlement.damageDeduction).toBe(125)
+    expect(settlement.refund).toBe(resource.deposit - 125)
   })
 })

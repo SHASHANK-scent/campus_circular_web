@@ -40,6 +40,8 @@ export interface User {
   hostel: string
   distanceMeters: number
   badges: string[]
+  suspended?: boolean
+  flagged?: boolean
 }
 export interface Resource {
   id: string
@@ -75,6 +77,7 @@ export interface Resource {
     note?: string
   }[]
   tags: string[]
+  removed?: boolean
 }
 export interface ConditionReport {
   at: string
@@ -141,6 +144,7 @@ export interface PlatformConfig {
   gracePeriodMinutes: number
 }
 export interface AppState {
+  stateVersion: number
   users: User[]
   resources: Resource[]
   exchanges: Exchange[]

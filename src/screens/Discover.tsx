@@ -27,6 +27,7 @@ export const Discover = () => {
         .filter(
           (item) =>
             item.approvalStatus === 'Approved' &&
+            !item.removed &&
             (category === 'All categories' || item.category === category),
         )
         .sort((a, b) =>

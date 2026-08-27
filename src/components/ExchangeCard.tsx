@@ -51,9 +51,19 @@ export const ExchangeCard = ({
                 ? `With ${otherParty.name}`
                 : 'Campus exchange'}
           </span>
-          <span className="font-bold text-slate-700">
-            {money(exchange.charges.borrowFee + exchange.charges.platformFee)}{' '}
-            <ArrowRight className="ml-1 inline h-3.5 w-3.5 text-emerald-600" />
+          <span className="text-right text-[10px] leading-4 text-slate-500">
+            <span className="block">Borrowing Charge {money(exchange.charges.borrowFee)}</span>
+            <span className="block">Platform Fee {money(exchange.charges.platformFee)}</span>
+            <span className="block">Security Deposit {money(exchange.charges.deposit)}</span>
+            <strong className="block text-xs text-emerald-700">
+              Transaction Amount{' '}
+              {money(
+                exchange.charges.borrowFee +
+                  exchange.charges.platformFee +
+                  exchange.charges.deposit,
+              )}
+              <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
+            </strong>
           </span>
         </div>
       </div>

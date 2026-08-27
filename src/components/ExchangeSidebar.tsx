@@ -120,6 +120,10 @@ export const ExchangeSidebar = ({
             <span className="font-bold">Refundable deposit</span>
             <b className="text-emerald-700">{money(pricing.deposit)}</b>
           </div>
+          <div className="flex justify-between border-t border-slate-100 pt-3 text-sm">
+            <span className="font-black">Transaction Amount</span>
+            <b className="text-emerald-700">{money(pricing.payableUpfront)}</b>
+          </div>
         </div>
       </div>
     </aside>

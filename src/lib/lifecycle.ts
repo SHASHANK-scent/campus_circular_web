@@ -1,11 +1,4 @@
-import type {
-  ConditionReport,
-  Exchange,
-  ExchangeStatus,
-  PlatformConfig,
-  Rating,
-  Resource,
-} from '../data/types'
+import type { Exchange, ExchangeStatus, PlatformConfig, Resource } from '../data/types'
 import { calculatePricing, type PriceBreakdown } from './pricing'
 
 export const LIFECYCLE_STEPS: ExchangeStatus[] = [
@@ -83,18 +76,4 @@ export const withTimeline = (
   ...exchange,
   status,
   timeline: [...exchange.timeline, { status, at, note }],
-})
-
-export const applyRating = (exchange: Exchange, role: ExchangeRole, rating: Rating): Exchange => ({
-  ...exchange,
-  ...(role === 'owner' ? { ratingByOwner: rating } : { ratingByBorrower: rating }),
-})
-
-export const applyConditionReport = (
-  exchange: Exchange,
-  role: ExchangeRole,
-  report: ConditionReport,
-): Exchange => ({
-  ...exchange,
-  ...(role === 'owner' ? { after: report } : { before: report }),
 })

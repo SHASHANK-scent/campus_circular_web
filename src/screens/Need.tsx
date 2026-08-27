@@ -126,6 +126,7 @@ export const Need = () => {
                 slot={slot}
                 selected={selected}
                 setSelected={setSelected}
+                onPostRequest={() => navigate(`/requests?text=${encodeURIComponent(intent.raw)}`)}
               />
             ))}
           </div>

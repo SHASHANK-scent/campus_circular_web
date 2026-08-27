@@ -8,7 +8,8 @@ export const Profile = () => {
   const { state } = useApp()
   const user = state.users.find((item) => item.id === id) ?? state.users[0]
   const listed = state.resources.filter(
-    (resource) => resource.ownerId === user.id && resource.approvalStatus === 'Approved',
+    (resource) =>
+      resource.ownerId === user.id && resource.approvalStatus === 'Approved' && !resource.removed,
   )
   const exchanges = state.exchanges.filter(
     (exchange) => exchange.ownerId === user.id || exchange.borrowerId === user.id,

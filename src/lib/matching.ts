@@ -237,6 +237,7 @@ export const matchIntent = (
   return slotTerms.map((tag) => {
     const matches = resources
       .filter((resource) => !usedResourceIds.has(resource.id))
+      .filter((resource) => resource.approvalStatus === 'Approved' && !resource.removed)
       .filter((resource) => {
         const title = resource.title.toLowerCase()
         const primaryTag = normalizeTerm(resource.tags[0] ?? '')
