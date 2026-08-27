@@ -287,7 +287,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
 }))
 
 export const seedState: AppState = {
-  stateVersion: 3,
+  stateVersion: 4,
   users: seedUsers,
   resources: seedResources,
   exchanges: [],
