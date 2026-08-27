@@ -36,7 +36,10 @@ describe('impact aggregations', () => {
 
   it('keeps exchange and fee revenue timelines spread across seeded dates', () => {
     const metrics = aggregateImpact(structuredClone(seedState))
-    expect(metrics.exchangesOverTime.length).toBeGreaterThan(1)
-    expect(metrics.feeRevenueOverTime.length).toBeGreaterThan(1)
+    expect(metrics.exchangesOverTime).toHaveLength(8)
+    expect(new Set(metrics.exchangesOverTime.map((point) => point.exchanges)).size).toBeGreaterThan(
+      1,
+    )
+    expect(metrics.feeRevenueOverTime).toHaveLength(8)
   })
 })

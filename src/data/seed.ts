@@ -3,7 +3,8 @@ import type { AppState, Category, Condition, Resource, User } from './types'
 const now = new Date('2025-03-15T10:00:00+05:30')
 const iso = (days: number, hours = 0) =>
   new Date(now.getTime() + (days * 24 + hours) * 3600000).toISOString()
-const exchangeAges = [56, 45, 35, 28, 21, 14, 7, 3]
+const exchangeAges = [53, 46, 45, 37, 30, 22, 21, 4]
+const historyAges = [50, 43, 36, 29, 22, 15, 8, 2]
 const evidencePhoto =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23ffe4e6'/%3E%3Ccircle cx='80' cy='60' r='32' fill='%23fb7185'/%3E%3Cpath d='M57 80l46-40M65 88l42-34' stroke='%239f1239' stroke-width='6'/%3E%3C/svg%3E"
 const afterEvidencePhoto =
@@ -267,7 +268,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
     'Student ID required at handover',
   ],
   rating: 4.1 + (index % 9) / 10,
-  timesBorrowed: 5 + index * 2,
+  timesBorrowed: [1, 3, 6, 17, 25].includes(index) ? 0 : 5 + index * 2,
   approvalStatus: index >= 27 ? 'Pending' : 'Approved',
   flagged: index === 4,
   history:
@@ -277,7 +278,7 @@ export const seedResources: Resource[] = catalog.map(([category, title, tag, tag
             exchangeId: `history-${index + 1}`,
             borrowerId: `u${(index % 8) + 1}`,
             onTime: index % 8 !== 0,
-            endedOn: iso(-((index * 7) % 56) - 2),
+            endedOn: iso(-historyAges[Math.floor(index / 4)]),
             note: 'Returned in great shape',
           },
         ]

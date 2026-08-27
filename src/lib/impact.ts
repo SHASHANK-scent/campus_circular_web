@@ -36,7 +36,13 @@ export const aggregateImpact = (state: AppState): ImpactMetrics => {
   })
   const returned = [...returnRecords.values()]
   const onTime = returned.filter(Boolean).length
-  const resourcesShared = state.resources.filter((resource) => resource.timesBorrowed > 0).length
+  const resourcesShared = state.resources.filter((resource) => !resource.removed).length
+  const borrowedResourceIds = new Set(
+    state.resources
+      .filter((resource) => resource.timesBorrowed > 0 || resource.history.length > 0)
+      .map((resource) => resource.id),
+  )
+  state.exchanges.forEach((exchange) => borrowedResourceIds.add(exchange.resourceId))
   const exchangeCounts = new Map<string, number>()
   completed.forEach((exchange) => {
     exchangeCounts.set(exchange.resourceId, (exchangeCounts.get(exchange.resourceId) ?? 0) + 1)
@@ -62,44 +68,50 @@ export const aggregateImpact = (state: AppState): ImpactMetrics => {
   state.exchanges.forEach((exchange) => {
     lenderCounts.set(exchange.ownerId, (lenderCounts.get(exchange.ownerId) ?? 0) + 1)
   })
-  const monthCounts = new Map<string, { timestamp: number; exchanges: number }>()
-  state.exchanges.forEach((exchange) => {
-    const timestamp = new Date(exchange.createdOn).getTime()
-    const label = new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(
-      new Date(exchange.createdOn),
-    )
-    const current = monthCounts.get(label)
-    monthCounts.set(label, { timestamp, exchanges: (current?.exchanges ?? 0) + 1 })
+  const now = new Date(state.simulatedNow).getTime()
+  const weekBuckets = Array.from({ length: 8 }, (_, index) => {
+    const olderDays = (8 - index) * 7
+    const newerDays = (7 - index) * 7
+    const start = now - olderDays * 24 * 60 * 60 * 1000
+    const end = now - newerDays * 24 * 60 * 60 * 1000
+    return {
+      start,
+      end,
+      label: new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(
+        new Date(start),
+      ),
+    }
   })
-  const feeRevenueOverTime = [...monthCounts.entries()]
-    .sort(([, a], [, b]) => a.timestamp - b.timestamp)
-    .map(([label]) => ({
-      label,
-      revenue: state.exchanges
-        .filter(
-          (exchange) =>
-            new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'short' }).format(
-              new Date(exchange.createdOn),
-            ) === label,
-        )
-        .reduce((total, exchange) => total + exchange.charges.platformFee, 0),
-    }))
+  const inBucket = (date: string, bucket: (typeof weekBuckets)[number]) => {
+    const timestamp = new Date(date).getTime()
+    return timestamp >= bucket.start && timestamp < bucket.end
+  }
+  const exchangesOverTime = weekBuckets.map((bucket) => ({
+    label: bucket.label,
+    exchanges:
+      state.exchanges.filter((exchange) => inBucket(exchange.createdOn, bucket)).length +
+      state.resources.reduce(
+        (total, resource) =>
+          total + resource.history.filter((history) => inBucket(history.endedOn, bucket)).length,
+        0,
+      ),
+  }))
+  const feeRevenueOverTime = weekBuckets.map((bucket) => ({
+    label: bucket.label,
+    revenue: state.exchanges
+      .filter((exchange) => inBucket(exchange.createdOn, bucket))
+      .reduce((total, exchange) => total + exchange.charges.platformFee, 0),
+  }))
   return {
     activeMembers: state.users.filter((user) => !user.suspended).length,
     resourcesShared,
     successfulExchanges: completed.length,
     onTimePercent: returned.length ? Math.round((onTime / returned.length) * 100) : 0,
     moneySaved: Math.round(moneySaved),
-    itemsReused: new Set(
-      state.resources
-        .filter((resource) => resource.timesBorrowed > 0)
-        .map((resource) => resource.id),
-    ).size,
+    itemsReused: borrowedResourceIds.size,
     ownershipAvoided:
       state.resources.reduce((total, resource) => total + resource.timesBorrowed, 0) * 1.8,
-    exchangesOverTime: [...monthCounts.entries()]
-      .sort(([, a], [, b]) => a.timestamp - b.timestamp)
-      .map(([label, point]) => ({ label, exchanges: point.exchanges })),
+    exchangesOverTime,
     popularCategories: [...categoryCounts.entries()]
       .map(([category, exchanges]) => ({ category, exchanges }))
       .sort((a, b) => b.exchanges - a.exchanges),
