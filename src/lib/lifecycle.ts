@@ -1,4 +1,5 @@
 import type { Exchange, ExchangeStatus, PlatformConfig, Resource } from '../data/types'
+import { activeFineSubtotals, activeFinesTotal } from './fines'
 import { settleCharges, type PriceBreakdown } from './pricing'
 
 export const LIFECYCLE_STEPS: ExchangeStatus[] = [
@@ -64,23 +65,9 @@ export const settlementForExchange = (
     dueAt: exchange.plan.dueAt,
     returnedAt: exchange.returnedAt ?? at,
     damageDeduction,
-    fines: exchange.fines.reduce(
-      (sum, fine) => sum + (fine.status === 'Waived' ? 0 : fine.amount),
-      0,
-    ),
-    fineCapMultiplier: config.fineCapMultiplier ?? 2,
-    ...(exchange.fines.some((fine) => fine.status !== 'Waived')
-      ? {
-          fineSubtotals: {
-            lateFee: exchange.fines
-              .filter((fine) => fine.reason === 'Late return' && fine.status !== 'Waived')
-              .reduce((sum, fine) => sum + fine.amount, 0),
-            damageDeduction: exchange.fines
-              .filter((fine) => fine.reason !== 'Late return' && fine.status !== 'Waived')
-              .reduce((sum, fine) => sum + fine.amount, 0),
-          },
-        }
-      : {}),
+    fines: activeFinesTotal(exchange.fines),
+    fineCapMultiplier: config.fineCapMultiplier,
+    fineSubtotals: activeFineSubtotals(exchange.fines),
   })
 
 export const withTimeline = (

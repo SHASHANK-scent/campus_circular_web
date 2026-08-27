@@ -143,7 +143,8 @@ export const Item = () => {
                   )}
                 </p>
                 <p className="text-xs text-slate-500">
-                  {owner.department} · {owner.year} · Trust {trustScore(owner, state.exchanges)}
+                  {owner.department} · {owner.year} · Trust{' '}
+                  {trustScore(owner, state.exchanges, state.config.gracePeriodMinutes)}
                 </p>
                 <div className="mt-2">
                   <OwnerVerificationBadge user={owner} />

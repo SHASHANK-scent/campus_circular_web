@@ -1,4 +1,5 @@
 import type { Exchange, Rating, User } from '../data/types'
+import { calculateHoursLate } from './pricing'
 
 export interface TrustBreakdown {
   base: number
@@ -26,13 +27,17 @@ export const avgRating = (user: User, exchanges: Exchange[]): number => {
   return (user.rating * user.ratingsCount + reviews.reduce((sum, review) => sum + review.stars, 0)) / weight
 }
 
-export const trustBreakdown = (user: User, exchanges: Exchange[]): TrustBreakdown => {
+export const trustBreakdown = (
+  user: User,
+  exchanges: Exchange[],
+  gracePeriodMinutes = 30,
+): TrustBreakdown => {
   const borrowerExchanges = exchanges.filter((exchange) => exchange.borrowerId === user.id)
   const lateReturns =
     user.lateReturns +
     borrowerExchanges.filter((exchange) => {
       if (!exchange.returnedAt) return false
-      return new Date(exchange.returnedAt).getTime() > new Date(exchange.plan.dueAt).getTime()
+      return calculateHoursLate(exchange.plan.dueAt, exchange.returnedAt, gracePeriodMinutes) > 0
     }).length
   const disputes =
     user.disputes +
@@ -65,8 +70,12 @@ export const trustBreakdown = (user: User, exchanges: Exchange[]): TrustBreakdow
   }
 }
 
-export const trustScore = (user: User, exchanges: Exchange[]): number => {
-  const breakdown = trustBreakdown(user, exchanges)
+export const trustScore = (
+  user: User,
+  exchanges: Exchange[],
+  gracePeriodMinutes = 30,
+): number => {
+  const breakdown = trustBreakdown(user, exchanges, gracePeriodMinutes)
   return Math.min(
     100,
     Math.max(

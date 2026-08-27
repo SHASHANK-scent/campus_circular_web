@@ -11,7 +11,7 @@ export const Verify = () => {
   const user = state.users.find((item) => item.id === state.currentUserId)
   const [step, setStep] = useState(0)
   const [otp, setOtp] = useState('123456')
-  if (!state.session?.loggedIn || !user) return <Navigate to="/login" replace />
+  if (!state.session.loggedIn || !user) return <Navigate to="/login" replace />
   const verification = user.verification
   const steps = [
     {

@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Badge, Avatar, PageTitle } from '../components/Layout'
 import { OwnerVerificationBadge } from '../components/VerificationBadge'
 import { trustScore } from '../lib/trust'
+import { ownerVerificationLevel } from '../lib/verification'
 import { useApp } from '../store/AppStore'
 
 export const Login = () => {
@@ -20,7 +21,7 @@ export const Login = () => {
             key={user.id}
             onClick={() => {
               dispatch({ type: 'login', userId: user.id })
-              navigate(user.verification.level === 'Fully Verified' ? '/' : '/verify-me')
+              navigate(ownerVerificationLevel(user.verification) === 'Fully Verified' ? '/' : '/verify-me')
             }}
             className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition hover:border-emerald-300 hover:shadow-md"
           >
@@ -30,11 +31,13 @@ export const Login = () => {
                 <p className="font-black">{user.name}</p>
                 <p className="text-xs text-slate-500">{user.department} · {user.year}</p>
               </div>
-              <p className="text-lg font-black text-emerald-700">{trustScore(user, state.exchanges)}</p>
+              <p className="text-lg font-black text-emerald-700">
+                {trustScore(user, state.exchanges, state.config.gracePeriodMinutes)}
+              </p>
             </div>
             <div className="mt-4 flex items-center justify-between">
               <OwnerVerificationBadge user={user} />
-              <Badge tone={user.verification.level === 'Fully Verified' ? 'green' : 'amber'}>
+              <Badge tone={ownerVerificationLevel(user.verification) === 'Fully Verified' ? 'green' : 'amber'}>
                 Trust score
               </Badge>
             </div>

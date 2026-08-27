@@ -25,6 +25,7 @@ import type {
   User,
 } from '../data/types'
 import { advanceClock } from '../lib/clock'
+import { activeFineSubtotals, applyLateFine } from '../lib/fines'
 import { canTransition, roleFor, withTimeline } from '../lib/lifecycle'
 import { settleCharges } from '../lib/pricing'
 import {
@@ -224,40 +225,7 @@ const refreshLateFees = (state: AppState, simulatedNow: string): AppState['excha
         : exchange
     const resource = state.resources.find((item) => item.id === exchange.resourceId)
     if (!resource) return next
-    const late = settleCharges({
-      charges: next.charges,
-      lateFeePerHour: resource.lateFeePerHour,
-      gracePeriodMinutes: state.config.gracePeriodMinutes,
-      dueAt: exchange.plan.dueAt,
-      returnedAt: simulatedNow,
-      damageDeduction: next.charges.damageDeduction,
-      fines: next.fines
-        .filter((fine) => fine.reason !== 'Late return' && fine.status !== 'Waived')
-        .reduce((sum, fine) => sum + fine.amount, 0),
-      fineCapMultiplier: state.config.fineCapMultiplier ?? 2,
-    })
-    const hoursLate = late.hoursLate
-    const lateAmount = hoursLate * resource.lateFeePerHour
-    const existing = next.fines.find((fine) => fine.reason === 'Late return')
-    const fines = hoursLate > 0
-      ? existing
-        ? next.fines.map((fine) =>
-            fine.id === existing.id ? { ...fine, amount: lateAmount, status: 'Pending' as const } : fine,
-          )
-        : [
-            ...next.fines,
-            {
-              id: `fine-late-${next.id}`,
-              reason: 'Late return' as const,
-              amount: lateAmount,
-              note: `${hoursLate} hour(s) late`,
-              issuedBy: next.ownerId,
-              issuedAt: simulatedNow,
-              status: 'Pending' as const,
-            },
-          ]
-      : next.fines
-    return { ...next, fines, charges: { ...next.charges, lateFee: lateAmount } }
+    return applyLateFine(next, resource, state.config, simulatedNow)
   })
 
 export const reducer = (state: AppState, action: Action): AppState => {
@@ -486,17 +454,44 @@ export const reducer = (state: AppState, action: Action): AppState => {
         exchange.id === action.exchangeId && exchange.dispute
           ? {
               ...exchange,
+              ...(() => {
+                const amount = Math.max(0, action.damageDeduction)
+                const damageFine = exchange.fines.find((fine) => fine.reason === 'Damage')
+                const fines =
+                  action.status === 'Rejected'
+                    ? exchange.fines.map((fine) =>
+                        fine.reason === 'Damage' ? { ...fine, status: 'Waived' as const } : fine,
+                      )
+                    : damageFine
+                      ? exchange.fines.map((fine) =>
+                          fine.id === damageFine.id
+                            ? { ...fine, amount, status: 'Pending' as const }
+                            : fine,
+                        )
+                      : [
+                          ...exchange.fines,
+                          {
+                            id: `fine-damage-${exchange.id}`,
+                            reason: 'Damage' as const,
+                            amount,
+                            issuedBy: exchange.ownerId,
+                            issuedAt: state.simulatedNow,
+                            status: 'Pending' as const,
+                            note: action.resolution,
+                          },
+                        ]
+                return {
+                  fines,
+                  charges: {
+                    ...exchange.charges,
+                    damageDeduction: action.status === 'Rejected' ? 0 : amount,
+                  },
+                }
+              })(),
               dispute: {
                 ...exchange.dispute,
                 status: action.status,
                 resolution: action.resolution,
-              },
-              charges: {
-                ...exchange.charges,
-                damageDeduction: Math.min(
-                  exchange.charges.deposit,
-                  Math.max(0, action.damageDeduction),
-                ),
               },
             }
           : exchange,
@@ -529,7 +524,12 @@ export const reducer = (state: AppState, action: Action): AppState => {
   }
   if (action.type === 'waiveFine') {
     const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
-    if (!state.isAdmin || !exchange || !exchange.fines.some((fine) => fine.id === action.fineId)) return state
+    if (
+      !state.isAdmin ||
+      !exchange ||
+      exchange.payment.status === 'Refunded' ||
+      !exchange.fines.some((fine) => fine.id === action.fineId)
+    ) return state
     return {
       ...state,
       exchanges: state.exchanges.map((item) =>
@@ -562,35 +562,9 @@ export const reducer = (state: AppState, action: Action): AppState => {
                     returnedAt: state.simulatedNow,
                     fines: (() => {
                       const resource = state.resources.find((item) => item.id === exchange.resourceId)
-                      if (!resource) return exchange.fines
-                      const hoursLate = Math.max(
-                        0,
-                        Math.ceil(
-                          (new Date(state.simulatedNow).getTime() - new Date(exchange.plan.dueAt).getTime() -
-                            state.config.gracePeriodMinutes * 60000) /
-                            3600000,
-                        ),
-                      )
-                      if (!hoursLate) return exchange.fines
-                      const existing = exchange.fines.find((fine) => fine.reason === 'Late return')
-                      return existing
-                        ? exchange.fines.map((fine) =>
-                            fine.id === existing.id
-                              ? { ...fine, amount: hoursLate * resource.lateFeePerHour, status: 'Pending' as const }
-                              : fine,
-                          )
-                        : [
-                            ...exchange.fines,
-                            {
-                              id: `fine-late-${exchange.id}`,
-                              reason: 'Late return' as const,
-                              amount: hoursLate * resource.lateFeePerHour,
-                              note: `${hoursLate} hour(s) late`,
-                              issuedBy: exchange.ownerId,
-                              issuedAt: state.simulatedNow,
-                              status: 'Pending' as const,
-                            },
-                          ]
+                      return resource
+                        ? applyLateFine(exchange, resource, state.config, state.simulatedNow).fines
+                        : exchange.fines
                     })(),
                   }
                 : {}),
@@ -687,19 +661,8 @@ export const reducer = (state: AppState, action: Action): AppState => {
           fines: exchange.fines
             .filter((fine) => fine.status !== 'Waived')
             .reduce((sum, fine) => sum + fine.amount, 0),
-          fineCapMultiplier: state.config.fineCapMultiplier ?? 2,
-          ...(exchange.fines.some((fine) => fine.status !== 'Waived')
-            ? {
-                fineSubtotals: {
-                  lateFee: exchange.fines
-                    .filter((fine) => fine.reason === 'Late return' && fine.status !== 'Waived')
-                    .reduce((sum, fine) => sum + fine.amount, 0),
-                  damageDeduction: exchange.fines
-                    .filter((fine) => fine.reason !== 'Late return' && fine.status !== 'Waived')
-                    .reduce((sum, fine) => sum + fine.amount, 0),
-                },
-              }
-            : {}),
+          fineCapMultiplier: state.config.fineCapMultiplier,
+          fineSubtotals: activeFineSubtotals(exchange.fines),
         })
         return {
           ...withTimeline(exchange, 'Settlement', state.simulatedNow, 'Settlement completed.'),
@@ -729,10 +692,12 @@ export const reducer = (state: AppState, action: Action): AppState => {
   }
   if (action.type === 'payOutstanding') {
     const exchange = state.exchanges.find((item) => item.id === action.exchangeId)
+    const outstanding = exchange?.payment.outstanding
     if (
       !exchange ||
       exchange.borrowerId !== state.currentUserId ||
-      exchange.payment.outstanding?.status !== 'Due'
+      !outstanding ||
+      outstanding.status !== 'Due'
     ) return state
     return {
       ...state,
@@ -743,7 +708,7 @@ export const reducer = (state: AppState, action: Action): AppState => {
               payment: {
                 ...item.payment,
                 outstanding: {
-                  ...item.payment.outstanding!,
+                  ...outstanding,
                   status: 'Paid' as const,
                   txnId: `CC-FINE-${item.id}`,
                   paidAt: state.simulatedNow,
@@ -754,39 +719,41 @@ export const reducer = (state: AppState, action: Action): AppState => {
       ),
     }
   }
-  if (action.type !== 'rating') return state
-  const exchangeForRating = state.exchanges.find((item) => item.id === action.exchangeId)
-  const ratingRole = exchangeForRating ? roleFor(exchangeForRating, state.currentUserId) : null
-  if (
-    !exchangeForRating ||
-    !ratingRole ||
-    action.side !== ratingRole ||
-    (exchangeForRating.status !== 'Settlement' && exchangeForRating.status !== 'Rated')
-    || (action.side === 'borrower' && exchangeForRating.payment.outstanding?.status === 'Due')
-  ) {
-    return state
+  if (action.type === 'rating') {
+    const exchangeForRating = state.exchanges.find((item) => item.id === action.exchangeId)
+    const ratingRole = exchangeForRating ? roleFor(exchangeForRating, state.currentUserId) : null
+    if (
+      !exchangeForRating ||
+      !ratingRole ||
+      action.side !== ratingRole ||
+      (exchangeForRating.status !== 'Settlement' && exchangeForRating.status !== 'Rated') ||
+      (action.side === 'borrower' && exchangeForRating.payment.outstanding?.status === 'Due')
+    ) {
+      return state
+    }
+    return {
+      ...state,
+      exchanges: state.exchanges.map((exchange) => {
+        if (exchange.id !== action.exchangeId) return exchange
+        const updated = {
+          ...exchange,
+          ...(action.side === 'owner'
+            ? { ratingByOwner: action.rating }
+            : { ratingByBorrower: action.rating }),
+        }
+        if (updated.ratingByOwner && updated.ratingByBorrower && updated.status === 'Settlement') {
+          return withTimeline(
+            updated,
+            'Rated',
+            state.simulatedNow,
+            'Both parties rated the exchange.',
+          )
+        }
+        return updated
+      }),
+    }
   }
-  return {
-    ...state,
-    exchanges: state.exchanges.map((exchange) => {
-      if (exchange.id !== action.exchangeId) return exchange
-      const updated = {
-        ...exchange,
-        ...(action.side === 'owner'
-          ? { ratingByOwner: action.rating }
-          : { ratingByBorrower: action.rating }),
-      }
-      if (updated.ratingByOwner && updated.ratingByBorrower && updated.status === 'Settlement') {
-        return withTimeline(
-          updated,
-          'Rated',
-          state.simulatedNow,
-          'Both parties rated the exchange.',
-        )
-      }
-      return updated
-    }),
-  }
+  return state
 }
 
 const StoreContext = createContext<{ state: AppState; dispatch: Dispatch<Action> } | null>(null)

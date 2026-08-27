@@ -208,7 +208,8 @@ export const scoreResource = (
           ? 0
           : 1
   const distance = 1 - Math.min(resource.distanceMeters, 2000) / 2000
-  const ownerTrust = (trustScore(owner, exchanges) / 100 + owner.rating / 5) / 2
+  const ownerTrust =
+    (trustScore(owner, exchanges, platform.gracePeriodMinutes) / 100 + owner.rating / 5) / 2
   const condition = conditionScore(resource.condition)
   const affordability =
     1 -

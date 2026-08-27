@@ -200,7 +200,9 @@ export const Discover = () => {
                     <span>
                       Trust {(() => {
                         const owner = state.users.find((user) => user.id === resource.ownerId)
-                        return owner ? trustScore(owner, state.exchanges) : 0
+                        return owner
+                          ? trustScore(owner, state.exchanges, state.config.gracePeriodMinutes)
+                          : 0
                       })()}
                     </span>
                     <span className="ml-auto">{resource.timesBorrowed} borrows</span>

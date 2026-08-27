@@ -212,7 +212,9 @@ export const AdminTabs = () => {
                       {user.department}
                     </span>
                   </td>
-                  <td className="p-4">{trustScore(user, state.exchanges)}</td>
+                  <td className="p-4">
+                    {trustScore(user, state.exchanges, state.config.gracePeriodMinutes)}
+                  </td>
                   <td className="p-4">{user.disputes}</td>
                   <td className="p-4">
                     {user.suspended ? (
@@ -521,7 +523,7 @@ export const AdminTabs = () => {
               <span>Handed over {formatDate(row.handedOverAt)}</span><span>Due {formatDate(row.dueAt)}</span><span>Returned {row.returnedAt ? formatDate(row.returnedAt) : 'still out'}</span><span>Condition {row.conditionBefore ?? '—'} → {row.conditionAfter ?? '—'}</span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {row.fines.map((fine) => <span className="inline-flex items-center gap-1" key={fine.id}><Badge tone={fine.status === 'Waived' ? 'slate' : 'amber'}>{fine.reason} {money(fine.amount)} · {fine.status}</Badge>{fine.status !== 'Waived' && <button onClick={() => dispatch({ type: 'waiveFine', exchangeId: row.exchange.id, fineId: fine.id })} className="rounded bg-slate-100 px-1.5 py-1 text-[10px] font-bold text-slate-600">Waive</button>}</span>)}
+              {row.fines.map((fine) => <span className="inline-flex items-center gap-1" key={fine.id}><Badge tone={fine.status === 'Waived' ? 'slate' : 'amber'}>{fine.reason} {money(fine.amount)} · {fine.status}</Badge>{fine.status !== 'Waived' && row.exchange.payment.status !== 'Refunded' && <button onClick={() => dispatch({ type: 'waiveFine', exchangeId: row.exchange.id, fineId: fine.id })} className="rounded bg-slate-100 px-1.5 py-1 text-[10px] font-bold text-slate-600">Waive</button>}{fine.status === 'Settled' && row.exchange.payment.status === 'Refunded' && <span className="text-[10px] text-slate-400">Settlement locked</span>}</span>)}
               <Badge tone="green">Deposit refunded {money(row.refunded)}</Badge>
               {row.outstanding > 0 && <Badge tone="rose">Outstanding {money(row.outstanding)}</Badge>}
             </div>

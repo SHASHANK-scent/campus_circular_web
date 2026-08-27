@@ -10,6 +10,7 @@ import type {
   Fine,
 } from './types'
 import { settleCharges } from '../lib/pricing'
+import { activeFineSubtotals, activeFinesTotal } from '../lib/fines'
 import { ownerVerificationLevel, STANDARD_CHECKS } from '../lib/verification'
 
 const now = new Date('2025-03-15T10:00:00+05:30')
@@ -508,8 +509,9 @@ export const seedExchanges = (): AppState['exchanges'] => {
       dueAt,
       returnedAt: returnedOn,
       damageDeduction: charges.damageDeduction,
-      fines: fines.reduce((sum, fine) => sum + fine.amount, 0),
+      fines: activeFinesTotal(fines),
       fineCapMultiplier: 2,
+      fineSubtotals: activeFineSubtotals(fines),
     })
     const paymentStatus: Payment['status'] =
       status === 'Settlement' || status === 'Rated'

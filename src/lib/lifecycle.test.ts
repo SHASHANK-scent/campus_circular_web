@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { seedExchanges, seedResources } from '../data/seed'
 import type { AppState, Exchange } from '../data/types'
 import { canTransition, roleFor, settlementForExchange } from './lifecycle'
+import { applyLateFine } from './fines'
 import { reducer } from '../store/AppStore'
 
 const resource = seedResources[0]
@@ -98,7 +99,20 @@ describe('exchange lifecycle', () => {
 
   it('grows the late fee after the grace period', () => {
     const pricing = settlementForExchange(
-      { ...baseExchange('Return Due'), returnedAt: '2025-03-16T12:31:00.000Z' },
+      {
+        ...baseExchange('Return Due'),
+        returnedAt: '2025-03-16T12:31:00.000Z',
+        fines: [
+          {
+            id: 'fine-late-test',
+            reason: 'Late return',
+            amount: resource.lateFeePerHour * 3,
+            issuedBy: 'u2',
+            issuedAt: '2025-03-16T12:31:00.000Z',
+            status: 'Pending',
+          },
+        ],
+      },
       resource,
       {
         platformFeePercent: 5,
@@ -120,6 +134,16 @@ describe('exchange lifecycle', () => {
         ...baseExchange('Settlement'),
         returnedAt: '2025-03-16T10:00:00.000Z',
         charges: { ...baseExchange().charges, damageDeduction: 9999 },
+        fines: [
+          {
+            id: 'fine-damage-test',
+            reason: 'Damage',
+            amount: 9999,
+            issuedBy: 'u2',
+            issuedAt: '2025-03-16T09:00:00.000Z',
+            status: 'Pending',
+          },
+        ],
       },
       resource,
       {
@@ -131,9 +155,9 @@ describe('exchange lifecycle', () => {
       },
       '2025-03-16T10:00:00.000Z',
     )
-    expect(pricing.damageDeduction).toBe(resource.deposit)
+    expect(pricing.damageDeduction).toBe(9999)
     expect(pricing.refund).toBe(0)
-    expect(pricing.netToOwner).toBe(80 + resource.deposit)
+    expect(pricing.netToOwner).toBe(80 + resource.deposit * 2)
   })
 
   it('moves a borrowed exchange to Return Due as the demo clock advances', () => {
@@ -263,6 +287,16 @@ describe('exchange lifecycle', () => {
         {
           ...baseExchange('Settlement'),
           returnedAt: '2025-03-16T10:00:00.000Z',
+          fines: [
+            {
+              id: 'fine-damage-test',
+              reason: 'Damage',
+              amount: 125,
+              issuedBy: 'u2',
+              issuedAt: '2025-03-16T09:00:00.000Z',
+              status: 'Pending',
+            },
+          ],
         },
       ],
       requests: [],
@@ -297,7 +331,17 @@ describe('exchange lifecycle', () => {
       resources: [resource],
       exchanges: [
         {
-          ...baseExchange('Inspection'),
+          ...baseExchange('Settlement'),
+          fines: [
+            {
+              id: 'fine-damage-test',
+              reason: 'Damage',
+              amount: 200,
+              issuedBy: 'u2',
+              issuedAt: '2025-03-16T09:00:00.000Z',
+              status: 'Pending',
+            },
+          ],
           dispute: {
             id: 'd-test',
             raisedBy: 'u2',
@@ -339,5 +383,151 @@ describe('exchange lifecycle', () => {
     )
     expect(settlement.damageDeduction).toBe(125)
     expect(settlement.refund).toBe(resource.deposit - 125)
+    const settled = reducer(
+      { ...resolved, currentUserId: 'u2' },
+      { type: 'settle', exchangeId: 'test-exchange' },
+    )
+    expect(settled.exchanges[0].fines[0]).toMatchObject({
+      amount: 125,
+      status: 'Settled',
+    })
+  })
+
+  it('waives all fines into a full refund and refuses waivers after settlement', () => {
+    const fines = [
+      {
+        id: 'fine-late-test',
+        reason: 'Late return' as const,
+        amount: 120,
+        issuedBy: 'u2',
+        issuedAt: '2025-03-16T09:00:00.000Z',
+        status: 'Waived' as const,
+      },
+      {
+        id: 'fine-damage-test',
+        reason: 'Damage' as const,
+        amount: 180,
+        issuedBy: 'u2',
+        issuedAt: '2025-03-16T09:00:00.000Z',
+        status: 'Waived' as const,
+      },
+    ]
+    const state: AppState = {
+      stateVersion: 8,
+      users: [],
+      resources: [resource],
+      exchanges: [
+        {
+          ...baseExchange('Settlement'),
+          returnedAt: '2025-03-16T10:00:00.000Z',
+          fines,
+        },
+      ],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
+      },
+      currentUserId: 'u2',
+      simulatedNow: '2025-03-16T10:00:00.000Z',
+      isAdmin: true,
+      session: { loggedIn: true },
+    }
+    const settled = reducer(state, { type: 'settle', exchangeId: 'test-exchange' })
+    const exchange = settled.exchanges[0]
+    expect(exchange.payment.refund?.amount).toBe(resource.deposit)
+    expect(exchange.payment.outstanding).toBeUndefined()
+    expect(exchange.charges.lateFee).toBe(0)
+    expect(exchange.charges.damageDeduction).toBe(0)
+    expect(
+      settlementForExchange(exchange, resource, state.config, state.simulatedNow).finesTotal,
+    ).toBe(0)
+    expect(
+      reducer(settled, {
+        type: 'waiveFine',
+        exchangeId: 'test-exchange',
+        fineId: 'fine-late-test',
+      }),
+    ).toBe(settled)
+  })
+
+  it('does not charge a late fine inside the grace period', () => {
+    const exchange = applyLateFine(
+      baseExchange('Return Due'),
+      resource,
+      {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
+      },
+      '2025-03-16T10:20:00.000Z',
+    )
+    expect(exchange.fines).toEqual([])
+    expect(exchange.charges.lateFee).toBe(0)
+  })
+
+  it('waives a rejected damage dispute and excludes it from settlement', () => {
+    const state: AppState = {
+      stateVersion: 8,
+      users: [],
+      resources: [resource],
+      exchanges: [
+        {
+          ...baseExchange('Settlement'),
+          fines: [
+            {
+              id: 'fine-damage-test',
+              reason: 'Damage',
+              amount: 200,
+              issuedBy: 'u2',
+              issuedAt: '2025-03-16T09:00:00.000Z',
+              status: 'Pending',
+            },
+          ],
+          dispute: {
+            id: 'd-test',
+            raisedBy: 'u2',
+            type: 'Damage',
+            description: 'A scratch was found.',
+            evidence: [],
+            claimedAmount: 200,
+            status: 'Open',
+            raisedOn: '2025-03-16T10:00:00.000Z',
+          },
+        },
+      ],
+      requests: [],
+      config: {
+        platformFeePercent: 5,
+        platformFeeMin: 10,
+        platformFeeMax: 150,
+        gracePeriodMinutes: 30,
+        fineCapMultiplier: 2,
+      },
+      currentUserId: 'u1',
+      simulatedNow: '2025-03-16T10:00:00.000Z',
+      isAdmin: true,
+      session: { loggedIn: true },
+    }
+    const rejected = reducer(state, {
+      type: 'resolveDispute',
+      exchangeId: 'test-exchange',
+      status: 'Rejected',
+      damageDeduction: 0,
+      resolution: 'Evidence did not support the claim.',
+    })
+    const exchange = rejected.exchanges[0]
+    expect(exchange.fines[0].status).toBe('Waived')
+    expect(exchange.charges.damageDeduction).toBe(0)
+    const settled = reducer(
+      { ...rejected, currentUserId: 'u2' },
+      { type: 'settle', exchangeId: 'test-exchange' },
+    )
+    expect(settled.exchanges[0].payment.refund?.amount).toBe(resource.deposit)
   })
 })

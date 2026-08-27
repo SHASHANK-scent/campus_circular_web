@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { ChevronDown, Clock3, Leaf, RotateCcw, Sparkles } from 'lucide-react'
 import { useApp } from '../store/AppStore'
 import { trustScore } from '../lib/trust'
+import { ownerVerificationLevel } from '../lib/verification'
 export const money = (value: number) => `₹${Math.round(value).toLocaleString('en-IN')}`
 export const Avatar = ({ initials, className = '' }: { initials: string; className?: string }) => (
   <span
@@ -68,7 +69,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
               <span className="hidden text-left sm:block">
                 <span className="block text-[11px] font-bold">{current.name.split(' ')[0]}</span>
                 <span className="block text-[10px] text-emerald-700">
-                  Trust {trustScore(current, state.exchanges)}
+                  Trust {trustScore(current, state.exchanges, state.config.gracePeriodMinutes)}
                 </span>
               </span>
             </button>
@@ -106,9 +107,9 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                   onChange={(event) => {
                     const userId = event.target.value
                     dispatch({ type: 'login', userId })
+                    const selected = state.users.find((user) => user.id === userId)
                     navigate(
-                      state.users.find((user) => user.id === userId)?.verification.level ===
-                        'Fully Verified'
+                      selected && ownerVerificationLevel(selected.verification) === 'Fully Verified'
                         ? '/'
                         : '/verify-me',
                     )
@@ -117,7 +118,7 @@ export const Layout = ({ children }: { children: React.ReactNode }) => {
                 >
                   {state.users.slice(0, 5).map((user) => (
                     <option value={user.id} key={user.id}>
-                      {user.name} · {trustScore(user, state.exchanges)}
+                      {user.name} · {trustScore(user, state.exchanges, state.config.gracePeriodMinutes)}
                     </option>
                   ))}
                 </select>

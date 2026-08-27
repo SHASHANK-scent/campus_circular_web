@@ -30,7 +30,7 @@ export interface SettlementInput {
   damageDeduction: number
   fines: number
   fineCapMultiplier: number
-  fineSubtotals?: { lateFee: number; damageDeduction: number }
+  fineSubtotals: { lateFee: number; damageDeduction: number }
 }
 export const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value))
@@ -41,15 +41,21 @@ export const calculateLateFee = (
   lateFeePerHour: number,
   deposit: number,
 ) => {
-  const hoursLate = Math.max(
+  const hoursLate = calculateHoursLate(dueAt, returnedAt, gracePeriodMinutes)
+  return { hoursLate, lateFee: Math.min(hoursLate * lateFeePerHour, deposit) }
+}
+export const calculateHoursLate = (
+  dueAt: string,
+  returnedAt: string,
+  gracePeriodMinutes: number,
+): number =>
+  Math.max(
     0,
     Math.ceil(
       (new Date(returnedAt).getTime() - new Date(dueAt).getTime() - gracePeriodMinutes * 60000) /
         3600000,
     ),
   )
-  return { hoursLate, lateFee: Math.min(hoursLate * lateFeePerHour, deposit) }
-}
 export const calculatePricing = ({
   resource,
   mode,
@@ -106,7 +112,6 @@ export const settleCharges = ({
   gracePeriodMinutes,
   dueAt,
   returnedAt,
-  damageDeduction,
   fines,
   fineCapMultiplier,
   fineSubtotals,
@@ -118,17 +123,15 @@ export const settleCharges = ({
     lateFeePerHour,
     charges.deposit,
   )
-  const damage = clamp(damageDeduction, 0, charges.deposit)
-  const effectiveFines = fines > 0 ? fines : late.lateFee + damage
-  const finesTotal = Math.min(Math.max(0, effectiveFines), charges.deposit * fineCapMultiplier)
+  const finesTotal = Math.min(Math.max(0, fines), charges.deposit * fineCapMultiplier)
   const fromDeposit = Math.min(finesTotal, charges.deposit)
   const refund = Math.max(0, charges.deposit - fromDeposit)
   return {
     borrowFee: charges.borrowFee,
     platformFee: charges.platformFee,
     deposit: charges.deposit,
-    lateFee: fineSubtotals?.lateFee ?? late.lateFee,
-    damageDeduction: fineSubtotals?.damageDeduction ?? damage,
+    lateFee: fineSubtotals.lateFee,
+    damageDeduction: fineSubtotals.damageDeduction,
     payableUpfront: charges.borrowFee + charges.platformFee + charges.deposit,
     refund,
     netToOwner: charges.borrowFee + finesTotal,

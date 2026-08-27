@@ -45,7 +45,7 @@ export const Profile = () => {
     stars,
     count: reviews.filter((review) => review.rating.stars === stars).length,
   }))
-  const breakdown = trustBreakdown(user, state.exchanges)
+  const breakdown = trustBreakdown(user, state.exchanges, state.config.gracePeriodMinutes)
   const onTime = Math.round(
     (user.successfulExchanges / Math.max(1, user.successfulExchanges + user.lateReturns)) * 100,
   )
@@ -76,7 +76,9 @@ export const Profile = () => {
             </p>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-5 text-center">
-            <p className="text-4xl font-black text-emerald-300">{trustScore(user, state.exchanges)}</p>
+            <p className="text-4xl font-black text-emerald-300">
+              {trustScore(user, state.exchanges, state.config.gracePeriodMinutes)}
+            </p>
             <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Trust score
             </p>

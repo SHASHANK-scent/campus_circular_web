@@ -27,4 +27,18 @@ describe('live trust scores', () => {
     expect(breakdown.lateReturnPenalty).toBeGreaterThan(0)
     expect(breakdown.disputePenalty).toBeGreaterThan(0)
   })
+
+  it('does not penalize a return inside the grace period', () => {
+    const state = structuredClone(seedState)
+    const user = state.users[0]
+    const exchange = {
+      ...state.exchanges[0],
+      borrowerId: user.id,
+      returnedAt: '2025-03-15T10:20:00.000Z',
+      plan: { ...state.exchanges[0].plan, dueAt: '2025-03-15T10:00:00.000Z' },
+    }
+    const breakdown = trustBreakdown(user, [exchange], state.config.gracePeriodMinutes)
+    expect(breakdown.lateReturns).toBe(user.lateReturns)
+    expect(breakdown.lateReturnPenalty).toBe(5 * user.lateReturns)
+  })
 })

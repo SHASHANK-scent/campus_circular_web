@@ -20,7 +20,7 @@ import { ownerVerificationLevel } from './lib/verification'
 const RequireVerified = ({ children }: { children: React.ReactNode }) => {
   const { state } = useApp()
   const location = useLocation()
-  if (!state.session?.loggedIn) return <Navigate to="/login" replace />
+  if (!state.session.loggedIn) return <Navigate to="/login" replace />
   const user = state.users.find((item) => item.id === state.currentUserId)
   if (!user || ownerVerificationLevel(user.verification) !== 'Fully Verified') {
     return <Navigate to="/verify-me" replace state={{ from: location.pathname }} />

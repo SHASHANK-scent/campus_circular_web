@@ -12,6 +12,7 @@ describe('fine settlement', () => {
       damageDeduction: 0,
       fines: 800,
       fineCapMultiplier: 2,
+      fineSubtotals: { lateFee: 800, damageDeduction: 0 },
     })
     expect(result.finesTotal).toBe(600)
     expect(result.refund).toBe(0)
