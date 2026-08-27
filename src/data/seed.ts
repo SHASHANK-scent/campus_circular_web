@@ -18,6 +18,7 @@ const iso = (days: number, hours = 0) =>
   new Date(now.getTime() + (days * 24 + hours) * 3600000).toISOString()
 const exchangeAges = [53, 46, 45, 37, 30, 22, 21, 4]
 const historyAges = [50, 43, 36, 29, 22, 15, 8, 2]
+const conditionOrder: Condition[] = ['Like New', 'Good', 'Fair', 'Worn']
 const evidencePhoto =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='120'%3E%3Crect width='160' height='120' fill='%23ffe4e6'/%3E%3Ccircle cx='80' cy='60' r='32' fill='%23fb7185'/%3E%3Cpath d='M57 80l46-40M65 88l42-34' stroke='%239f1239' stroke-width='6'/%3E%3C/svg%3E"
 const afterEvidencePhoto =
@@ -442,7 +443,11 @@ export const seedExchanges = (): AppState['exchanges'] => {
       borrowerId === resource.ownerId ? (resource.ownerId === 'u1' ? 'u2' : 'u1') : borrowerId
     const startAt = iso(-age)
     const dueAt = status === 'Borrowed' ? iso(2) : iso(-age + units)
-    const returnedOn = iso(-age + units)
+    const returnedOn =
+      index === 5
+        ? new Date(new Date(dueAt).getTime() + (30 * 60000 + 2 * 3600000)).toISOString()
+        : iso(-age + units)
+    const hasReturned = ['Inspection', 'Settlement', 'Rated'].includes(status)
     const reportBefore = {
       at: startAt,
       by: resource.ownerId,
@@ -466,6 +471,28 @@ export const seedExchanges = (): AppState['exchanges'] => {
       ],
       notes: 'Scratch documented during return inspection.',
     }
+    const beforeReport = hasReturned
+      ? { ...reportBefore, overall: resource.condition }
+      : undefined
+    const afterReport = hasReturned
+      ? {
+          ...reportAfter,
+          overall:
+            index === 3
+              ? conditionOrder[
+                  Math.min(
+                    conditionOrder.length - 1,
+                    conditionOrder.indexOf(resource.condition) + 1,
+                  )
+                ]
+              : resource.condition,
+          checklist: index === 3 ? reportAfter.checklist : reportBefore.checklist,
+          notes:
+            index === 3
+              ? reportAfter.notes
+              : 'Condition checked and returned in the recorded condition.',
+        }
+      : undefined
     const borrowFee = Math.max(resource.minimumCharge, resource.dailyCharge * units)
     const charges = {
       borrowFee,
@@ -564,8 +591,8 @@ export const seedExchanges = (): AppState['exchanges'] => {
               raisedOn: returnedOn,
             }
           : undefined,
-      before: status === 'Inspection' ? reportBefore : undefined,
-      after: status === 'Inspection' ? reportAfter : undefined,
+      before: beforeReport,
+      after: afterReport,
       returnedAt:
         status === 'Inspection' || status === 'Settlement' || status === 'Rated'
           ? returnedOn

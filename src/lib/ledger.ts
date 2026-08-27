@@ -1,4 +1,5 @@
 import type { AppState, Exchange, Fine } from '../data/types'
+import { calculateHoursLate } from './pricing'
 
 export interface LedgerRow {
   exchange: Exchange
@@ -14,7 +15,7 @@ export interface LedgerRow {
   conditionBefore?: string
   conditionAfter?: string
   fines: Fine[]
-  refunded: number
+  refunded?: number
   outstanding: number
 }
 export interface LedgerSummary {
@@ -28,13 +29,22 @@ export interface LedgerSummary {
 
 const completedStatuses = ['Handover', 'Borrowed', 'Return Due', 'Returned', 'Inspection', 'Settlement', 'Rated']
 
+export const formatOverdue = (hours: number): string => {
+  if (hours > 48) return `${Math.floor(hours / 24)}d ${hours % 24}h overdue`
+  return `${hours}h overdue`
+}
+
 export const ledgerRows = (state: AppState): LedgerRow[] =>
   state.exchanges
     .filter((exchange) => completedStatuses.includes(exchange.status))
     .map((exchange) => {
-      const due = new Date(exchange.plan.dueAt).getTime()
       const returned = exchange.returnedAt ? new Date(exchange.returnedAt).getTime() : undefined
-      const lateByHours = returned === undefined ? Math.max(0, Math.ceil((new Date(state.simulatedNow).getTime() - due) / 3600000)) : Math.max(0, Math.ceil((returned - due) / 3600000))
+      const stillOut = returned === undefined
+      const lateByHours = calculateHoursLate(
+        exchange.plan.dueAt,
+        exchange.returnedAt ?? state.simulatedNow,
+        state.config.gracePeriodMinutes,
+      )
       return {
         exchange,
         title: state.resources.find((resource) => resource.id === exchange.resourceId)?.title ?? exchange.resourceId,
@@ -43,14 +53,18 @@ export const ledgerRows = (state: AppState): LedgerRow[] =>
         handedOverAt: exchange.timeline.find((entry) => entry.status === 'Handover')?.at ?? exchange.plan.startAt,
         dueAt: exchange.plan.dueAt,
         returnedAt: exchange.returnedAt,
-        stillOut: !exchange.returnedAt,
-        overdue: !exchange.returnedAt && new Date(state.simulatedNow).getTime() > due,
+        stillOut,
+        overdue: stillOut && lateByHours > 0,
         lateByHours,
         conditionBefore: exchange.before?.overall,
         conditionAfter: exchange.after?.overall,
         fines: exchange.fines,
-        refunded: exchange.payment.refund?.amount ?? 0,
-        outstanding: exchange.payment.outstanding?.status === 'Due' ? exchange.payment.outstanding.amount : 0,
+        refunded:
+          exchange.payment.status === 'Refunded' ? exchange.payment.refund?.amount ?? 0 : undefined,
+        outstanding:
+          exchange.payment.status === 'Refunded' && exchange.payment.outstanding?.status === 'Due'
+            ? exchange.payment.outstanding.amount
+            : 0,
       }
     })
     .sort((a, b) => Number(b.overdue) - Number(a.overdue) || b.dueAt.localeCompare(a.dueAt))
